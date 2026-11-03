@@ -10,6 +10,7 @@ Homepage: https://github.com/klondikemarlen/calendar-busy-sync
 Package: calendar-busy-sync
 Architecture: all
 Depends: python3 (>= 3.11), python3-requests (>= 2.31), python3-google-auth-oauthlib (>= 1.0), python3-msal (>= 1.24), cron
+Recommends: python3-venv
 Suggests: google-cloud-cli, azure-cli
 Description: local anonymous busy-time mirroring between calendars
  Copies unavailable intervals between Google Calendar and Outlook as private
