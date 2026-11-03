@@ -12,6 +12,14 @@ For development, run `make dev`, then `.venv/bin/calendar-busy-sync --help`. The
 
 No shared application credentials are bundled. Both registrations are free; your organization still controls whether its account can consent.
 
+### Optional Registration Tools
+
+The Debian package suggests `google-cloud-cli` (the `gcloud` command) and `azure-cli` (the `az` command) as optional one-time registration aids. Neither is required by `calendar-busy-sync setup`, account authorization, manual sync or cron: the Python application talks directly to the calendar APIs. Browser-based registration remains supported without either CLI. They are suggestions rather than recommendations because normal installations can operate without them, and APT normally installs recommended packages by default.
+
+Install them yourself only if you want terminal-based project or application administration. Follow the [Google Cloud CLI installation instructions](https://docs.cloud.google.com/sdk/docs/install-sdk) or [Azure CLI installation instructions](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli-linux?pivots=apt); their APT packages may require separately configured vendor repositories. Installing this package does not add those repositories, install the suggested CLIs by default, sign you in or register applications.
+
+Google Workspace CLI (`gws`) is not a dependency. Its setup wizard is another optional helper, not needed for the procedure below. Administrative CLI sign-in and the calendar application's calendar-access consent are separate authorizations.
+
 ### Google
 
 1. In [Google Cloud](https://console.cloud.google.com/), create/select a project and enable the Google Calendar API.
@@ -21,6 +29,21 @@ No shared application credentials are bundled. Both registrations are free; your
 
 Google's consent-screen **Testing** status can cause refresh tokens for these scopes to expire after seven days. Review [Google's refresh-token expiration rules](https://developers.google.com/identity/protocols/oauth2#expiration); do not assume a scheduled sync will remain authorized indefinitely. A broader old Google grant must be revoked and authorized again before it can truthfully become read-only.
 
+For optional CLI-assisted preparation, the following commands create a dedicated project and enable only Calendar, using a separate owner-only `gcloud` configuration outside the checkout. Choose a globally unique project ID in place of `your-unique-project-id`. Complete Google's browser sign-in yourself; these commands authorize project administration, not the calendar application's access to your events.
+
+```sh
+export CLOUDSDK_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/calendar-busy-sync/gcloud"
+install -d -m 700 "$CLOUDSDK_CONFIG"
+gcloud auth login
+PROJECT_ID=your-unique-project-id
+gcloud projects create "$PROJECT_ID" --name="Calendar Busy Sync"
+gcloud services enable calendar-json.googleapis.com --project="$PROJECT_ID"
+```
+
+For an existing project, set `PROJECT_ID` to its ID and skip `gcloud projects create`. These commands do not link billing, create calendar events or enable scheduling. Select that project in Cloud Console and finish the audience and **Desktop app** client creation described above; Google's [documented Desktop client registration](https://developers.google.com/identity/protocols/oauth2/native-app#creatingcred) still uses the Console. Do not substitute `gcloud iam oauth-clients` (workforce identity federation) for the Calendar Desktop client.
+
+After supplying the downloaded client JSON to `calendar-busy-sync setup`, `calendar-busy-sync auth google` opens the browser consent flow and stores refreshable credentials privately. No CLI administration token is reused as a calendar-access token. Refresh remains subject to the Testing-mode expiry and revocation rules above.
+
 ### Microsoft
 
 1. Ask your organization's administrator whether a locally run public-client app may access your own calendar through Microsoft Graph. Register an application in [Microsoft Entra](https://entra.microsoft.com/) or obtain the approved application ID from your administrator.
@@ -29,6 +52,8 @@ Google's consent-screen **Testing** status can cause refresh tokens for these sc
 4. Record the application/client ID and tenant ID/domain for the wizard. `organizations` is appropriate only when the registration supports that audience. MSAL also handles the standard sign-in/offline scopes needed for refresh.
 
 The tool cannot bypass a tenant policy. If authorization is blocked, keep scheduling disabled and ask the administrator to review this exact delegated-calendar use case.
+
+Azure CLI can help an authorized administrator provision the public-client registration through Microsoft Graph, instead of using Entra's forms. It is not needed to accept an existing approved client ID or to complete the application's device sign-in. Keep any administrative CLI login separate from the application's local token cache; never use tenant-wide calendar consent merely to simplify setup.
 
 ## Guided Setup
 
