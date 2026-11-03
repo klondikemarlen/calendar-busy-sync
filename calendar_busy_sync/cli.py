@@ -9,7 +9,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from . import __version__, auth, engine, models, settings, state
+from . import __version__, auth, engine, models, registration, settings, state
 from .schedule import ScheduleError, disable_schedule, enable_schedule, schedule_status
 
 
@@ -69,15 +69,38 @@ def _setup(paths: settings.Paths) -> int:
     )
     if direction not in {"google-to-outlook", "both"}:
         raise models.SyncError("Direction must be google-to-outlook or both.")
-    google_path = Path(_prompt("Path to Google OAuth Desktop client JSON")).expanduser()
+    google_input = _prompt(
+        "Path to Google OAuth Desktop client JSON (leave blank for guided registration)",
+        default=str(paths.google_client_file) if paths.google_client_file.is_file() else "",
+    )
+    if not google_input:
+        if _yes_no("Prepare a Google Calendar project with CLI assistance?", default=False):
+            registration.prepare_google(paths, prompt=_prompt, confirm=_yes_no)
+        else:
+            print("Create a Desktop OAuth client at https://console.cloud.google.com/auth/clients")
+        google_input = _prompt("Path to downloaded Google OAuth Desktop client JSON")
+    google_path = Path(google_input).expanduser()
     try:
         client_data = json.loads(google_path.read_text(encoding="utf-8"))
         if not isinstance(client_data, dict) or "installed" not in client_data:
             raise ValueError
     except (OSError, ValueError, json.JSONDecodeError):
         raise models.SyncError("Could not read a valid Google Desktop OAuth client JSON file.") from None
-    ms_id = _prompt("Microsoft public-client application ID", default=old.microsoft_client_id if old else "")
-    tenant = _prompt("Microsoft tenant", default=old.microsoft_tenant if old else "organizations")
+    ms_id = _prompt(
+        "Microsoft public-client application ID (leave blank for guided registration)",
+        default=old.microsoft_client_id if old else "",
+    )
+    created_microsoft = None
+    if not ms_id:
+        if _yes_no("Create a Microsoft public-client registration with CLI assistance?", default=False):
+            created_microsoft = registration.create_microsoft(paths, prompt=_prompt, confirm=_yes_no)
+        if created_microsoft is None:
+            print("Obtain an approved public-client application ID at https://entra.microsoft.com/")
+            ms_id = _prompt("Microsoft public-client application ID")
+    if created_microsoft is not None:
+        ms_id, tenant = created_microsoft
+    else:
+        tenant = _prompt("Microsoft tenant", default=old.microsoft_tenant if old else "organizations")
     try:
         current = settings.Settings(
             direction=direction,
