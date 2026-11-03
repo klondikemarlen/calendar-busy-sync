@@ -1,0 +1,10 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: calendar-busy-sync
+Source: https://github.com/klondikemarlen/calendar-busy-sync
+
+Files: *
+Copyright: 2026 Marlen
+License: All-rights-reserved
+ No distribution license has been selected by the copyright owner.
+ Public source visibility is not a license grant. Obtain the owner's license
+ decision before redistribution or a public Launchpad PPA upload.
