@@ -14,9 +14,13 @@ No shared application credentials are bundled. Both registrations are free; your
 
 ### Optional Registration Tools
 
-The Debian package suggests `google-cloud-cli` (the `gcloud` command) and `azure-cli` (the `az` command) as optional one-time registration aids. Neither is required by `calendar-busy-sync setup`, account authorization, manual sync or cron: the Python application talks directly to the calendar APIs. Browser-based registration remains supported without either CLI. They are suggestions rather than recommendations because normal installations can operate without them, and APT normally installs recommended packages by default.
+The Debian package suggests `google-cloud-cli` (the `gcloud` command) and `azure-cli` (the `az` command), and recommends `python3-venv` for temporary Azure CLI installation. Normal authorization, sync and cron use Python APIs directly and do not need either CLI. APT normally installs the recommended virtual-environment support, but not the suggested cloud CLIs. Browser-based registration remains supported without them.
 
-Install them yourself only if you want terminal-based project or application administration. Follow the [Google Cloud CLI installation instructions](https://docs.cloud.google.com/sdk/docs/install-sdk) or [Azure CLI installation instructions](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli-linux?pivots=apt); their APT packages may require separately configured vendor repositories. Installing this package does not add those repositories, install the suggested CLIs by default, sign you in or register applications.
+In `calendar-busy-sync setup`, leave the Google client path or Microsoft application ID blank to request guided registration. The wizard offers CLI assistance, reuses an executable already on `PATH`, and asks before downloading a missing tool into a private temporary directory. Declining leaves the manual credential/ID path available. No `sudo`, vendor-repository changes, shell-profile edits or permanent tool cache are involved.
+
+Each provider helper uses an isolated administrative login/configuration directory even when reusing a global executable. Setup removes its downloaded tool files and temporary administrative login data when that provider's helper finishes, fails or is cancelled with Ctrl+C. Global executables and their existing configuration remain untouched. Final application credentials/state and provider-side registrations are not temporary and are preserved. A forced process kill or power failure can prevent normal temporary-file cleanup.
+
+Temporary Azure CLI installation needs Python virtual-environment/pip support. If installing without recommended packages, install `python3-venv` yourself if missing or use the manual registration path. Users preferring system CLIs can follow the [Google Cloud CLI](https://docs.cloud.google.com/sdk/docs/install-sdk) or [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli-linux?pivots=apt) installation instructions. Package installation itself does not download cloud CLIs, add repositories, sign in, register applications or enable jobs.
 
 Google Workspace CLI (`gws`) is not a dependency. Its setup wizard is another optional helper, not needed for the procedure below. Administrative CLI sign-in and the calendar application's calendar-access consent are separate authorizations.
 
@@ -29,18 +33,9 @@ Google Workspace CLI (`gws`) is not a dependency. Its setup wizard is another op
 
 Google's consent-screen **Testing** status can cause refresh tokens for these scopes to expire after seven days. Review [Google's refresh-token expiration rules](https://developers.google.com/identity/protocols/oauth2#expiration); do not assume a scheduled sync will remain authorized indefinitely. A broader old Google grant must be revoked and authorized again before it can truthfully become read-only.
 
-For optional CLI-assisted preparation, the following commands create a dedicated project and enable only Calendar, using a separate owner-only `gcloud` configuration outside the checkout. Choose a globally unique project ID in place of `your-unique-project-id`. Complete Google's browser sign-in yourself; these commands authorize project administration, not the calendar application's access to your events.
+For guided Google preparation, choose an existing project or confirm creation of a new one, then confirm enabling Calendar API. These are explicit durable Cloud changes; setup never links billing. The helper removes its temporary tooling/login data before handing off to the project-specific Console branding, audience and client pages.
 
-```sh
-export CLOUDSDK_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/calendar-busy-sync/gcloud"
-install -d -m 700 "$CLOUDSDK_CONFIG"
-gcloud auth login
-PROJECT_ID=your-unique-project-id
-gcloud projects create "$PROJECT_ID" --name="Calendar Busy Sync"
-gcloud services enable calendar-json.googleapis.com --project="$PROJECT_ID"
-```
-
-For an existing project, set `PROJECT_ID` to its ID and skip `gcloud projects create`. These commands do not link billing, create calendar events or enable scheduling. Select that project in Cloud Console and finish the audience and **Desktop app** client creation described above; Google's [documented Desktop client registration](https://developers.google.com/identity/protocols/oauth2/native-app#creatingcred) still uses the Console. Do not substitute `gcloud iam oauth-clients` (workforce identity federation) for the Calendar Desktop client.
+Google's [documented Desktop client registration](https://developers.google.com/identity/protocols/oauth2/native-app#creatingcred) still requires the Console step. Complete it and download the JSON to a private location outside the checkout, then provide its path when the wizard resumes. Do not substitute `gcloud iam oauth-clients` (workforce identity federation) for the Calendar Desktop client.
 
 After supplying the downloaded client JSON to `calendar-busy-sync setup`, `calendar-busy-sync auth google` opens the browser consent flow and stores refreshable credentials privately. No CLI administration token is reused as a calendar-access token. Refresh remains subject to the Testing-mode expiry and revocation rules above.
 
@@ -53,11 +48,11 @@ After supplying the downloaded client JSON to `calendar-busy-sync setup`, `calen
 
 The tool cannot bypass a tenant policy. If authorization is blocked, keep scheduling disabled and ask the administrator to review this exact delegated-calendar use case.
 
-Azure CLI can help an authorized administrator provision the public-client registration through Microsoft Graph, instead of using Entra's forms. It is not needed to accept an existing approved client ID or to complete the application's device sign-in. Keep any administrative CLI login separate from the application's local token cache; never use tenant-wide calendar consent merely to simplify setup.
+The guided Microsoft helper signs into your tenant using isolated Azure CLI configuration and separately asks before creating a single-tenant public-client registration named **Calendar Busy Sync**. It declares only delegated `Calendars.ReadWrite`, creates no secret, and grants no tenant-wide consent. The resulting application and tenant IDs feed the setup wizard; normal application device consent remains separate. If an external creation may have succeeded before a later failure, inspect the provider Console rather than blindly creating another registration.
 
 ## Guided Setup
 
-Run `calendar-busy-sync setup` in a terminal. The wizard accepts the local Google desktop-client JSON, Microsoft client ID/tenant, and direction. It preserves the installation identity on reconfiguration. It separately offers authorization, a read-only connectivity check, an initial sync, and finally scheduling; none is implied by installing the package. A corrupt existing configuration must be repaired without inventing a new installation identity.
+Run `calendar-busy-sync setup` in a terminal. Supply an existing Google desktop-client JSON and approved Microsoft client ID/tenant, or leave the corresponding entry blank for the optional just-in-time registration guide described above. The wizard preserves the installation identity on reconfiguration. It separately offers application authorization, a read-only connectivity check, an initial sync, and finally scheduling; none is implied by installing the package or an administration helper. A corrupt existing configuration must be repaired without inventing a new installation identity.
 
 Alternatively, after configuration:
 
