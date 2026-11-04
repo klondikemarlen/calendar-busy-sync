@@ -6,7 +6,9 @@ import re
 import tempfile
 import uuid
 from dataclasses import asdict, dataclass, field
+from datetime import time
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .models import SyncError
 
@@ -83,6 +85,18 @@ class Settings:
     installation_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     days_back: int = 7
     days_forward: int = 365
+    work_hours_enabled: bool = False
+    work_timezone: str = "UTC"
+    work_days: list[str] = field(default_factory=lambda: ["mon", "tue", "wed", "thu", "fri"])
+    work_start: str = "08:00"
+    work_end: str = "17:00"
+    work_lead_minutes: int = 120
+    work_trail_minutes: int = 120
+    google_lead_minutes: int = 0
+    google_trail_minutes: int = 0
+    outlook_lead_minutes: int = 0
+    outlook_trail_minutes: int = 0
+    event_padding_overrides: list[dict] = field(default_factory=list)
 
     def validate(self):
         if self.direction not in ("google-to-outlook", "both"):
@@ -104,6 +118,67 @@ class Settings:
             raise SyncError("The look-back window must be between 0 and 365 days.")
         if type(self.days_forward) is not int or not 1 <= self.days_forward <= 730:
             raise SyncError("The look-ahead window must be between 1 and 730 days.")
+        if type(self.work_hours_enabled) is not bool:
+            raise SyncError("work_hours_enabled must be true or false.")
+        try:
+            ZoneInfo(self.work_timezone)
+        except (ZoneInfoNotFoundError, ValueError, TypeError):
+            raise SyncError("Use an IANA work timezone such as UTC or America/Phoenix.") from None
+        if (
+            not isinstance(self.work_days, list)
+            or not self.work_days
+            or not all(
+                isinstance(day, str) and day in {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
+                for day in self.work_days
+            )
+            or len(set(self.work_days)) != len(self.work_days)
+        ):
+            raise SyncError("Work days must be unique names from mon through sun.")
+        for value in (self.work_start, self.work_end):
+            if not isinstance(value, str) or not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", value):
+                raise SyncError("Work start/end must use 24-hour HH:MM.")
+        if time.fromisoformat(self.work_end) <= time.fromisoformat(self.work_start):
+            raise SyncError("Work end must be later than work start on the same day.")
+        for name in (
+            "work_lead_minutes",
+            "work_trail_minutes",
+            "google_lead_minutes",
+            "google_trail_minutes",
+            "outlook_lead_minutes",
+            "outlook_trail_minutes",
+        ):
+            value = getattr(self, name)
+            if type(value) is not int or not 0 <= value <= 1440:
+                raise SyncError(f"{name} must be an integer from 0 to 1440.")
+        if not isinstance(self.event_padding_overrides, list):
+            raise SyncError("Event padding overrides must be a list.")
+        seen = set()
+        for override in self.event_padding_overrides:
+            if not isinstance(override, dict) or set(override) != {
+                "source",
+                "event_id",
+                "lead_minutes",
+                "trail_minutes",
+            }:
+                raise SyncError("Each event override needs source, event_id, lead_minutes and trail_minutes.")
+            source, event_id = override["source"], override["event_id"]
+            if (
+                source not in ("google", "outlook")
+                or not isinstance(event_id, str)
+                or not event_id.strip()
+                or "\n" in event_id
+                or "\r" in event_id
+            ):
+                raise SyncError(
+                    "Event overrides need a google/outlook source and a nonempty single-line event ID."
+                )
+            if (source, event_id) in seen:
+                raise SyncError("An event may have only one padding override.")
+            seen.add((source, event_id))
+            for name in ("lead_minutes", "trail_minutes"):
+                value = override[name]
+                if type(value) is not int or not 0 <= value <= 1440:
+                    raise SyncError("Event padding minutes must be integers from 0 to 1440.")
 
 
 def load_settings(paths: Paths) -> Settings:

@@ -20,6 +20,7 @@ class Mapping:
     target: str
     target_id: str
     marker: str
+    content_version: int = 0
 
 
 class State:
@@ -31,9 +32,16 @@ class State:
             "CREATE TABLE IF NOT EXISTS copies ("
             "source TEXT NOT NULL, source_id TEXT NOT NULL, target TEXT NOT NULL, "
             "target_id TEXT NOT NULL, marker TEXT NOT NULL, "
+            "content_version INTEGER NOT NULL DEFAULT 0, "
             "PRIMARY KEY (source, source_id, target));"
             "CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);"
         )
+        columns = {row[1] for row in self.connection.execute("PRAGMA table_info(copies)")}
+        if "content_version" not in columns:
+            self.connection.execute(
+                "ALTER TABLE copies ADD COLUMN content_version INTEGER NOT NULL DEFAULT 0"
+            )
+            self.connection.commit()
 
     def __enter__(self):
         return self
@@ -45,7 +53,7 @@ class State:
         return [
             Mapping(*row)
             for row in self.connection.execute(
-                "SELECT source, source_id, target, target_id, marker FROM copies "
+                "SELECT source, source_id, target, target_id, marker, content_version FROM copies "
                 "WHERE source = ? AND target = ?",
                 (source, target),
             )
@@ -53,9 +61,18 @@ class State:
 
     def remember(self, mapping: Mapping):
         self.connection.execute(
-            "INSERT INTO copies VALUES (?, ?, ?, ?, ?) ON CONFLICT(source, source_id, target) "
-            "DO UPDATE SET target_id=excluded.target_id, marker=excluded.marker",
-            (mapping.source, mapping.source_id, mapping.target, mapping.target_id, mapping.marker),
+            "INSERT INTO copies (source, source_id, target, target_id, marker, content_version) "
+            "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(source, source_id, target) "
+            "DO UPDATE SET target_id=excluded.target_id, marker=excluded.marker, "
+            "content_version=excluded.content_version",
+            (
+                mapping.source,
+                mapping.source_id,
+                mapping.target,
+                mapping.target_id,
+                mapping.marker,
+                mapping.content_version,
+            ),
         )
         self.connection.commit()
 

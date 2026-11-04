@@ -7,6 +7,7 @@ import json
 import sqlite3
 import sys
 from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
 
 from . import __version__, auth, engine, models, registration, settings, state
@@ -47,6 +48,36 @@ def _config_is_scheduled(paths: settings.Paths) -> bool:
         if "crontab is not installed" in str(exc):
             return False
         raise
+
+
+def _configure_timing(current: settings.Settings) -> settings.Settings:
+    enabled = _yes_no("Restrict copies to padded work hours?", default=True)
+    timezone = _prompt("Work timezone (IANA name)", default=current.work_timezone)
+    work_days = _prompt("Workdays (mon tue wed thu fri sat sun)", default=" ".join(current.work_days))
+    work_start = _prompt("Work start (HH:MM)", default=current.work_start)
+    work_end = _prompt("Work end (HH:MM)", default=current.work_end)
+    minutes = {}
+    for name, label in (
+        ("work_lead_minutes", "Work-window minutes before work starts"),
+        ("work_trail_minutes", "Work-window minutes after work ends"),
+        ("google_lead_minutes", "Google-to-Outlook event minutes before"),
+        ("google_trail_minutes", "Google-to-Outlook event minutes after"),
+        ("outlook_lead_minutes", "Outlook-to-Google event minutes before"),
+        ("outlook_trail_minutes", "Outlook-to-Google event minutes after"),
+    ):
+        try:
+            minutes[name] = int(_prompt(label, default=str(getattr(current, name))))
+        except ValueError:
+            raise models.SyncError("Padding minutes must be whole numbers from 0 to 1440.") from None
+    return replace(
+        current,
+        work_hours_enabled=enabled,
+        work_timezone=timezone,
+        work_days=work_days.lower().replace(",", " ").split(),
+        work_start=work_start,
+        work_end=work_end,
+        **minutes,
+    )
 
 
 def _setup(paths: settings.Paths) -> int:
@@ -102,16 +133,14 @@ def _setup(paths: settings.Paths) -> int:
     else:
         tenant = _prompt("Microsoft tenant", default=old.microsoft_tenant if old else "organizations")
     try:
-        current = settings.Settings(
+        current = replace(
+            old or settings.Settings(),
             direction=direction,
             microsoft_client_id=ms_id,
             microsoft_tenant=tenant,
-            installation_id=old.installation_id if old else settings.Settings().installation_id,
-            google_calendar=old.google_calendar if old else "primary",
-            outlook_calendar=old.outlook_calendar if old else "default",
-            days_back=old.days_back if old else 7,
-            days_forward=old.days_forward if old else 365,
         )
+        if _yes_no("Configure work hours and event padding?", default=False):
+            current = _configure_timing(current)
         current.validate()
         with engine.sync_lock(paths):
             if _config_is_scheduled(paths):

@@ -1,7 +1,7 @@
 """Provider-independent unavailable intervals; never carry private event details."""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Protocol
 
 GRAPH_PROPERTY_ID = "String {e575b7e1-a0e2-4dd8-8b82-c0a3a37f104b} Name calendar-busy-sync"
@@ -26,7 +26,13 @@ class Event:
     def __post_init__(self):
         if not self.id or not isinstance(self.id, str):
             raise SyncError("A calendar returned an event without an identifier; sync stopped.")
-        if self.start.tzinfo is None or self.end.tzinfo is None or self.end <= self.start:
+        if (
+            self.start.tzinfo is None
+            or self.start.utcoffset() is None
+            or self.end.tzinfo is None
+            or self.end.utcoffset() is None
+            or self.end.astimezone(UTC) <= self.start.astimezone(UTC)
+        ):
             raise SyncError("A calendar returned an invalid time interval; sync stopped.")
 
 

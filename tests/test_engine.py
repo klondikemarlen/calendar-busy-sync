@@ -1,4 +1,5 @@
 import json
+import sqlite3
 import tempfile
 import unittest
 from dataclasses import replace
@@ -8,7 +9,7 @@ from pathlib import Path
 from calendar_busy_sync.engine import sync_lock, synchronize
 from calendar_busy_sync.models import Event, SyncError
 from calendar_busy_sync.settings import Paths, Settings, load_settings, save_settings
-from calendar_busy_sync.state import has_success
+from calendar_busy_sync.state import State, has_success
 
 NOW = datetime(2026, 11, 3, 12, tzinfo=UTC)
 
@@ -109,8 +110,9 @@ class EngineTests(unittest.TestCase):
         with self.assertRaises(SyncError):
             self.sync()
         self.assertFalse(has_success(self.paths, self.settings))
+        self.assertEqual(self.sync(), {"created": 0, "updated": 1, "deleted": 0, "unchanged": 0})
+        self.assertEqual(self.outlook.writes, [("create", "copy-0"), ("update", "copy-0")])
         self.assertEqual(self.sync(), {"created": 0, "updated": 0, "deleted": 0, "unchanged": 1})
-        self.assertEqual(self.outlook.writes, [("create", "copy-0")])
 
     def test_unowned_replacement_is_never_deleted(self):
         self.sync()
@@ -179,6 +181,59 @@ class EngineTests(unittest.TestCase):
         self.assertTrue(has_success(self.paths, self.settings))
         self.settings.direction = "both"
         self.assertFalse(has_success(self.paths, self.settings))
+
+    def test_work_filter_and_travel_changes_reconcile_only_owned_copies(self):
+        originals = (dict(self.google.events), dict(self.outlook.events))
+        self.settings.work_hours_enabled = True
+        self.settings.work_timezone = "Etc/GMT+7"
+        self.settings.event_padding_overrides = [
+            {"source": "google", "event_id": "personal", "lead_minutes": 60, "trail_minutes": 30}
+        ]
+        self.sync()
+        copy = next(value for value in self.outlook.events.values() if value.marker)
+        source = self.google.events["personal"]
+        self.assertEqual(
+            (copy.start, copy.end), (source.start - timedelta(hours=1), source.end + timedelta(minutes=30))
+        )
+        self.settings.event_padding_overrides[0]["lead_minutes"] = 90
+        self.assertEqual(self.sync()["updated"], 1)
+        self.settings.work_start, self.settings.work_end = "15:00", "17:00"
+        self.settings.work_lead_minutes = self.settings.work_trail_minutes = 0
+        self.assertEqual(self.sync()["deleted"], 1)
+        self.assertEqual((self.google.events, self.outlook.events), originals)
+
+    def test_padding_retrieves_source_beyond_nominal_horizon(self):
+        end = NOW + timedelta(days=self.settings.days_forward)
+        source = Event("edge", end + timedelta(minutes=15), end + timedelta(minutes=45))
+        self.google.events = {source.id: source}
+        self.settings.google_lead_minutes = 30
+        self.assertEqual(self.sync()["created"], 1)
+        copy = next(value for value in self.outlook.events.values() if value.marker)
+        self.assertEqual((copy.start, copy.end), (end - timedelta(minutes=15), source.end))
+        self.assertEqual(self.sync()["unchanged"], 1)
+        self.google.list_events = lambda start, end: []
+        with self.assertRaises(SyncError):
+            self.sync()
+        self.assertEqual(self.outlook.events[copy.id], copy)
+        self.assertEqual(self.outlook.writes, [("create", copy.id)])
+
+    def test_legacy_references_migrate_and_refresh_content_once(self):
+        self.sync()
+        copy = next(value for value in self.outlook.events.values() if value.marker)
+        with sqlite3.connect(self.paths.database_file) as connection:
+            connection.executescript(
+                "CREATE TABLE legacy_copies (source TEXT NOT NULL, source_id TEXT NOT NULL, "
+                "target TEXT NOT NULL, target_id TEXT NOT NULL, marker TEXT NOT NULL, "
+                "PRIMARY KEY (source, source_id, target));"
+                "INSERT INTO legacy_copies SELECT source, source_id, target, target_id, marker FROM copies;"
+                "DROP TABLE copies; ALTER TABLE legacy_copies RENAME TO copies;"
+            )
+        self.assertEqual(self.sync(), {"created": 0, "updated": 1, "deleted": 0, "unchanged": 0})
+        self.assertEqual(self.sync(), {"created": 0, "updated": 0, "deleted": 0, "unchanged": 1})
+        self.assertEqual(self.outlook.events[copy.id], copy)
+        with State(self.paths) as state:
+            row = state.mappings("google", "outlook")[0]
+        self.assertEqual((row.target_id, row.marker, row.content_version), (copy.id, copy.marker, 1))
 
     def test_existing_configuration_without_identity_is_rejected(self):
         save_settings(self.paths, self.settings)
