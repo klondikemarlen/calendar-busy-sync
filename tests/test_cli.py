@@ -39,7 +39,9 @@ class CliTests(unittest.TestCase):
             crontab = binary / "crontab"
             crontab.write_text("#!/bin/sh\nprintf 'no crontab for test\\n' >&2\nexit 1\n")
             crontab.chmod(0o755)
-            answers = TerminalInput(f"\n{credentials}\n00000000-0000-0000-0000-000000000001\n\nn\nn\nn\nn\n")
+            answers = TerminalInput(
+                f"\n{credentials}\n00000000-0000-0000-0000-000000000001\n\n\n\nn\nn\nn\nn\n"
+            )
             with (
                 patch("calendar_busy_sync.cli._paths", return_value=paths),
                 patch.dict(os.environ, {"PATH": f"{binary}:/usr/bin:/bin"}),
@@ -66,7 +68,7 @@ class CliTests(unittest.TestCase):
             crontab.write_text("#!/bin/sh\nprintf 'no crontab for test\\n' >&2\nexit 1\n")
             crontab.chmod(0o755)
             answers = TerminalInput(
-                f"\n\nn\n{credentials}\n\nn\n00000000-0000-0000-0000-000000000001\n\nn\nn\nn\nn\n"
+                f"\n\nn\n{credentials}\n\nn\n00000000-0000-0000-0000-000000000001\n\n\n\nn\nn\nn\nn\n"
             )
             with (
                 patch("calendar_busy_sync.cli._paths", return_value=paths),

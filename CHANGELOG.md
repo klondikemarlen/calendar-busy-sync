@@ -12,3 +12,4 @@
 - Add separate event lead/trail defaults in each direction and private per-occurrence travel overrides, without changing originals.
 - Keep only fixed origin notes in Busy copies; refuse guest-bearing copy updates/deletions and migrate existing copy content once without duplicate creation.
 - Preserve Outlook ownership markers in calendar-range reads so existing Busy copies are not duplicated or mirrored back when Graph suppresses selected extended properties.
+- Default new configurations to seven days back and 60 days ahead; expose both day counts during setup and retain existing explicit horizon choices.
