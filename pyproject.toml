@@ -1,11 +1,13 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "calendar-busy-sync"
 version = "0.1.0"
 description = "Local anonymous busy-time mirroring between Google Calendar and Outlook"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = ["requests>=2.31", "google-auth-oauthlib>=1.0", "msal>=1.24"]
 
