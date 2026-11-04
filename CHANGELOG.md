@@ -11,3 +11,4 @@
 - Filter copies by configurable local workdays/hours and independent work-window margins; keep full eligible intervals rather than clipping them.
 - Add separate event lead/trail defaults in each direction and private per-occurrence travel overrides, without changing originals.
 - Keep only fixed origin notes in Busy copies; refuse guest-bearing copy updates/deletions and migrate existing copy content once without duplicate creation.
+- Preserve Outlook ownership markers in calendar-range reads so existing Busy copies are not duplicated or mirrored back when Graph suppresses selected extended properties.
