@@ -8,10 +8,10 @@ dev:
 	$(VENV)/bin/python -m pip install -e '.[dev]'
 
 lint:
-	$(VENV)/bin/ruff check calendar_busy_sync tests packaging debian/calendar-busy-sync-cli
+	$(VENV)/bin/ruff check calendar_busy_sync tests packaging debian/calendar-busy-sync-cli debian/prerm
 
 format-check:
-	$(VENV)/bin/ruff format --check calendar_busy_sync tests packaging debian/calendar-busy-sync-cli
+	$(VENV)/bin/ruff format --check calendar_busy_sync tests packaging debian/calendar-busy-sync-cli debian/prerm
 
 test:
 	$(VENV)/bin/python -m unittest discover -s tests -v

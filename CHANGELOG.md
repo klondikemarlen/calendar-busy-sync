@@ -15,3 +15,4 @@
 - Default new configurations to seven days back and 60 days ahead; expose both day counts during setup and retain existing explicit horizon choices.
 - License the project under MIT, including Python package metadata and license notices in source, wheel and Debian artifacts.
 - Explain read-only connectivity success separately for Google and Outlook and label 24-hour event counts in `doctor` and setup, including that zero events is not a connection failure.
+- Preserve managed schedules across upgrades, load updated code on the next execution, and remove only the Debian package's managed system-Python cron job during uninstall while retaining unrelated jobs and user data.

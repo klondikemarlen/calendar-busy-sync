@@ -9,7 +9,7 @@ make deb
 make source
 ```
 
-These use `dpkg-buildpackage` in an isolated staging directory and copy the resulting `.deb`, `.dsc`, source archive, and build metadata into `dist/`. Build tools are `dpkg-dev`, `make`, and Python 3.11+. Debian/Ubuntu runtime dependencies are declared in `debian/control`; no pip downloads, account authorization or crontab edits happen in package maintainer scripts. There are no maintainer scripts that start background synchronization.
+These use `dpkg-buildpackage` in an isolated staging directory and copy the resulting `.deb`, `.dsc`, source archive, and build metadata into `dist/`. Build tools are `dpkg-dev`, `make`, and Python 3.11+. Debian/Ubuntu runtime dependencies are declared in `debian/control`; package installation performs no pip downloads, account authorization, calendar operations, or crontab edits. No maintainer script starts background synchronization. Upgrades preserve existing managed schedules; the next execution loads the upgraded code. On removal, an isolated, standard-library-only `prerm` removes only well-formed managed jobs using `/usr/bin/python3 -m calendar_busy_sync sync` across local accounts. Other interpreter jobs and unrelated cron entries are preserved. Cleanup ambiguity or failure aborts removal; credentials, configuration, state, and calendar events are retained.
 
 The Python package can also be built with `make build` after `make dev`. Install a built wheel into a durable private virtual environment when system-wide package installation is not desired. Do not schedule a temporary build/QA environment.
 
