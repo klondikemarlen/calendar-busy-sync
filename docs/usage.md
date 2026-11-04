@@ -66,6 +66,45 @@ calendar-busy-sync status
 
 `doctor` reads both calendars without writing events. A dry run previews operation counts, not private details, and does not satisfy the scheduling gate. A manual sync prints created/updated/deleted/unchanged counts. Nonzero exit status means the run did not finish successfully; scheduled runs never open an interactive sign-in prompt. Reauthorize explicitly with `calendar-busy-sync auth google` or `calendar-busy-sync auth outlook` when instructed.
 
+## Work Hours and Travel Time
+
+During `setup`, choose **Configure work hours and event padding?** to set the work timezone, weekdays, local start/end, independent work-window margins, and event padding for each direction. Skipping this step preserves existing choices. Legacy configurations remain unfiltered with zero event padding until explicitly configured.
+
+Work-window margins decide which appointments qualify; they do not extend an appointment. For example, 08:00–17:00 with 120 minutes on either side admits intervals overlapping 06:00–19:00 on the configured workdays. `Etc/GMT+7` means UTC-7 year-round; choose a regional IANA zone instead when the work schedule should follow daylight saving. Start/end use local wall time, with end later than start on the same day. Margins may cross midnight and remain anchored to the configured workday.
+
+Event lead/trail time separately expands the copied Busy block using elapsed minutes. An appointment at 10:15–10:25 with 60 minutes before and after becomes 09:15–11:25 in the destination. Originals never change. A per-event override replaces both directional defaults for that exact provider event/expanded occurrence ID; it does not apply automatically to the entire recurring series or infer travel from a title or location.
+
+For per-event overrides, disable the managed schedule before editing the private `config.json` under the configuration directory described below. Preserve its existing account fields and `installation_id`; merge these timing fields rather than replacing the whole file:
+
+```json
+{
+  "work_hours_enabled": true,
+  "work_timezone": "Etc/GMT+7",
+  "work_days": ["mon", "tue", "wed", "thu", "fri"],
+  "work_start": "08:00",
+  "work_end": "17:00",
+  "work_lead_minutes": 120,
+  "work_trail_minutes": 120,
+  "google_lead_minutes": 0,
+  "google_trail_minutes": 0,
+  "outlook_lead_minutes": 0,
+  "outlook_trail_minutes": 0,
+  "event_padding_overrides": [
+    {
+      "source": "google",
+      "event_id": "synthetic-occurrence-id",
+      "lead_minutes": 60,
+      "trail_minutes": 60
+    }
+  ]
+}
+```
+
+`source` is `google` for Google-to-Outlook or `outlook` for Outlook-to-Google. Use unique source/event-ID pairs. Every minutes field must be an integer from 0 through 1440, and workdays must be unique lowercase names from `mon` through `sun`. Keep real event IDs and all account configuration outside Git.
+
+The complete buffered interval is copied when it overlaps both the sync horizon and an eligible padded work window; it is never clipped or split. Touching a boundary without any overlap does not qualify. All-day and multi-day events qualify if any permitted window overlaps. Reads extend beyond the nominal horizon to include events whose travel padding overlaps it. Run `sync --dry-run` before applying changes: events that no longer qualify have only their owned copies removed. A successful sync under the changed configuration is required before re-enabling scheduling.
+
+
 ## Optional Scheduling
 
 After a successful sync using the current configuration:
@@ -84,7 +123,9 @@ The computer must be awake, online, and running cron. Missed cron executions are
 
 Configuration is stored under `${XDG_CONFIG_HOME:-~/.config}/calendar-busy-sync`; credentials, SQLite references and lock files are under `${XDG_STATE_HOME:-~/.local/state}/calendar-busy-sync`. Directories are owner-only and credential/state files are private. Never commit or share these files. Preserve the configuration's installation identity and sync database; discarding ownership state can leave anonymous orphan copies that require manual review.
 
-Copies are timed, private Busy appointments without the source title, description, location, attendees, meeting links or reminders. All-day originals become timed blocks spanning their actual local-midnight boundaries; daylight-saving days need not be 24 hours long. Recurring occurrences are expanded by the providers rather than recreated as destination recurrence rules.
+Copies are timed, private Busy appointments without the source title, description, location, attendees, meeting links or reminders. The only description is a fixed origin note: `From personal calendar.` in Outlook or `From work calendar.` in Google. Existing owned copies receive the note once on their next successful sync; later unchanged syncs do not rewrite them. Copies are created without guests or online meetings. Do not add guests to them: the tool refuses to update or delete a guest-bearing copy rather than trigger meeting updates or cancellations. An unrelated calendar overlay is never changed just because its title or time looks similar.
+
+All-day originals become timed blocks spanning their actual local-midnight boundaries; daylight-saving days need not be 24 hours long. Recurring occurrences are expanded by the providers rather than recreated as destination recurrence rules.
 
 The default horizon is seven days back and 365 days ahead. Sources inside it are mirrored; a tracked source that moves outside it has its old copy removed. Historical copied events outside the current views are retained when they cannot be identified from the local tracking references. Do not use destination copies to edit originals. One-way mode never writes Google; reciprocal mode requires explicit additional Google consent. Tool-owned copies are not mirrored back.
 
