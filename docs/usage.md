@@ -64,7 +64,9 @@ calendar-busy-sync sync
 calendar-busy-sync status
 ```
 
-`doctor` reads both calendars without writing events. A dry run previews operation counts, not private details, and does not satisfy the scheduling gate. A manual sync prints created/updated/deleted/unchanged counts. Nonzero exit status means the run did not finish successfully; scheduled runs never open an interactive sign-in prompt. Reauthorize explicitly with `calendar-busy-sync auth google` or `calendar-busy-sync auth outlook` when instructed.
+`doctor` prints a human-readable success report after both calendars have been read, with Google and Outlook event counts for the next 24 hours. These are counts, not error codes: zero means no events were returned in that window, not a connection failure. The probe does not use the full configured sync horizon and never writes calendar events. Setup uses the same report for its optional connectivity check. If either read fails, the command reports an error instead of success.
+
+A dry run previews operation counts, not private details, and does not satisfy the scheduling gate. A manual sync prints created/updated/deleted/unchanged counts. Nonzero exit status means the run did not finish successfully; scheduled runs never open an interactive sign-in prompt. Reauthorize explicitly with `calendar-busy-sync auth google` or `calendar-busy-sync auth outlook` when instructed.
 
 ## Work Hours and Travel Time
 
