@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        if: hashFiles('pyproject.toml') != ''
+        with:
+          python-version: '3.11'
+
+      - name: Check, build, and smoke the installed Python CLI
+        if: hashFiles('pyproject.toml') != ''
+        run: |
+          make dev
+          make check
+          make build
+          python -m venv "$RUNNER_TEMP/installed-cli"
+          "$RUNNER_TEMP/installed-cli/bin/python" -m pip install dist/*.whl
+          "$RUNNER_TEMP/installed-cli/bin/calendar-busy-sync" --help
+          "$RUNNER_TEMP/installed-cli/bin/calendar-busy-sync" --version
+
+      - name: Report Python checks not applicable
+        if: hashFiles('pyproject.toml') == ''
+        shell: bash
+        run: |
+          if [[ -n "$(git ls-files '*.py')" ]]; then
+            echo "::error::Python source exists but pyproject.toml is missing."
+            exit 1
+          fi
+          echo 'Python checks: N/A — this revision contains no Python project.' >> "$GITHUB_STEP_SUMMARY"
