@@ -14,3 +14,4 @@
 - Preserve Outlook ownership markers in calendar-range reads so existing Busy copies are not duplicated or mirrored back when Graph suppresses selected extended properties.
 - Default new configurations to seven days back and 60 days ahead; expose both day counts during setup and retain existing explicit horizon choices.
 - License the project under MIT, including Python package metadata and license notices in source, wheel and Debian artifacts.
+- Explain read-only connectivity success and 24-hour event counts in `doctor` and setup, including that zero events is not a connection failure.

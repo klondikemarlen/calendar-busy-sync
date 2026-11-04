@@ -80,6 +80,16 @@ def _configure_timing(current: settings.Settings) -> settings.Settings:
     )
 
 
+def _doctor(paths: settings.Paths) -> None:
+    counts = engine.doctor(settings.load_settings(paths), paths)
+    print("Google and Outlook calendar reads: OK (read-only).")
+    print("Event counts returned for the next 24 hours:")
+    print(f"  Google: {counts['google']}")
+    print(f"  Outlook: {counts['outlook']}")
+    print("A count of 0 means no events in that window, not a connection failure.")
+    print("No calendar events were changed.")
+
+
 def _setup(paths: settings.Paths) -> int:
     if _config_is_scheduled(paths):
         if not _yes_no(
@@ -170,8 +180,7 @@ def _setup(paths: settings.Paths) -> int:
     if _yes_no("Authorize Google and Outlook now?", default=False):
         _authorize("all", paths)
     if _yes_no("Run a read-only connectivity check?", default=False):
-        result = engine.doctor(settings.load_settings(paths), paths)
-        print(json.dumps(result, sort_keys=True))
+        _doctor(paths)
     if _yes_no("Run the initial synchronization now?", default=False):
         print(json.dumps(_run_sync(paths), sort_keys=True))
         if _yes_no("Enable a recurring schedule?", default=False):
@@ -239,8 +248,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = _run_sync(paths, args.dry_run)
             print(json.dumps(result, sort_keys=True))
         elif args.command == "doctor":
-            configured = settings.load_settings(paths)
-            print(json.dumps(engine.doctor(configured, paths), sort_keys=True))
+            _doctor(paths)
         elif args.command == "status":
             configured = settings.load_settings(paths)
             print(
