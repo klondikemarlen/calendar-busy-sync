@@ -82,7 +82,8 @@ def _configure_timing(current: settings.Settings) -> settings.Settings:
 
 def _doctor(paths: settings.Paths) -> None:
     counts = engine.doctor(settings.load_settings(paths), paths)
-    print("Google and Outlook calendar reads: OK (read-only).")
+    print("Google calendar reads: OK (read-only).")
+    print("Outlook calendar reads: OK (read-only).")
     print("Event counts returned for the next 24 hours:")
     print(f"  Google: {counts['google']}")
     print(f"  Outlook: {counts['outlook']}")
