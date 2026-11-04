@@ -1,0 +1,18 @@
+Source: calendar-busy-sync
+Section: utils
+Priority: optional
+Maintainer: Marlen <23045206+klondikemarlen@users.noreply.github.com>
+Build-Depends: dpkg-dev (>= 1.17), python3 (>= 3.11)
+Standards-Version: 4.7.2
+Rules-Requires-Root: no
+Homepage: https://github.com/klondikemarlen/calendar-busy-sync
+
+Package: calendar-busy-sync
+Architecture: all
+Depends: python3 (>= 3.11), python3-requests (>= 2.31), python3-google-auth-oauthlib (>= 1.0), python3-msal (>= 1.24), cron
+Recommends: python3-venv
+Suggests: google-cloud-cli, azure-cli
+Description: local anonymous busy-time mirroring between calendars
+ Copies unavailable intervals between Google Calendar and Outlook as private
+ Busy appointments. Includes interactive setup, manual sync and opt-in cron.
+ Installation never authenticates accounts, writes calendar events or enables cron.

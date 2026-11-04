@@ -1,0 +1,22 @@
+#!/usr/bin/make -f
+PACKAGE := calendar-busy-sync
+ROOT := debian/$(PACKAGE)
+
+.PHONY: build build-arch build-indep clean binary binary-arch binary-indep
+build build-arch build-indep:
+
+clean:
+	rm -rf $(ROOT) debian/files debian/*.substvars debian/*.debhelper.log
+
+binary: binary-indep
+binary-arch:
+binary-indep: build-indep
+	install -d $(ROOT)/usr/lib/python3/dist-packages/calendar_busy_sync $(ROOT)/usr/bin
+	install -m 644 calendar_busy_sync/*.py $(ROOT)/usr/lib/python3/dist-packages/calendar_busy_sync/
+	install -m 755 debian/calendar-busy-sync-cli $(ROOT)/usr/bin/calendar-busy-sync
+	install -d $(ROOT)/usr/share/doc/$(PACKAGE) $(ROOT)/DEBIAN
+	install -m 644 README.md debian/copyright docs/*.md $(ROOT)/usr/share/doc/$(PACKAGE)/
+	install -m 755 debian/prerm $(ROOT)/DEBIAN/prerm
+	gzip -n -9 -c debian/changelog > $(ROOT)/usr/share/doc/$(PACKAGE)/changelog.gz
+	dpkg-gencontrol -p$(PACKAGE) -P$(ROOT)
+	dpkg-deb --root-owner-group --build $(ROOT) ..
