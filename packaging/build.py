@@ -14,9 +14,16 @@ def main():
     root = Path(__file__).resolve().parent.parent
     output = root / "dist"
     output.mkdir(exist_ok=True)
+    version = subprocess.run(
+        ["dpkg-parsechangelog", "--show-field", "Version"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
     with tempfile.TemporaryDirectory(prefix="debian-build-", dir=output) as temporary:
         build_root = Path(temporary)
-        source = build_root / "calendar-busy-sync-0.1.0"
+        source = build_root / f"calendar-busy-sync-{version}"
         source.mkdir()
         # Public source inputs only; never copy an arbitrary checkout/credential file.
         for name in ("calendar_busy_sync", "debian", "docs", "packaging", "tests"):
