@@ -11,6 +11,9 @@ from datetime import UTC, datetime, timedelta
 from .models import CalendarClient, CopyIdUnavailable, Event, SyncError
 from .settings import Paths, Settings, load_settings
 from .state import Mapping, State
+from .timing import TimingPolicy
+
+_CONTENT_VERSION = 1
 
 
 @contextmanager
@@ -59,8 +62,12 @@ def _generation_copies(events: list[Event], marker: str) -> list[Event]:
     ]
 
 
-def _plan_direction(settings, state, clients, snapshots, source, target, start, end):
-    originals = {event.id: event for event in snapshots[source] if event.busy and not event.marker}
+def _plan_direction(settings, state, clients, snapshots, source, target, start, end, timing):
+    originals = {}
+    for event in snapshots[source]:
+        desired = timing.desired_copy(source, event, start, end)
+        if desired is not None:
+            originals[event.id] = desired
     mappings = {row.source_id: row for row in state.mappings(source, target)}
     operations = []
 
@@ -89,9 +96,18 @@ def _plan_direction(settings, state, clients, snapshots, source, target, start, 
             continue
         candidates.sort(key=lambda event: (event.id != (mapping.target_id if mapping else ""), event.id))
         chosen = candidates[0]
-        mapping = Mapping(source, source_id, target, chosen.id, chosen.marker)
+        content_version = (
+            mapping.content_version
+            if mapping and mapping.target_id == chosen.id and mapping.marker == chosen.marker
+            else 0
+        )
+        mapping = Mapping(source, source_id, target, chosen.id, chosen.marker, content_version)
         kind = "unchanged"
-        if (chosen.start, chosen.end, chosen.busy) != (original.start, original.end, True):
+        if (chosen.start, chosen.end, chosen.busy) != (
+            original.start,
+            original.end,
+            True,
+        ) or content_version < _CONTENT_VERSION:
             kind = "updated"
         operations.append(Operation(kind, mapping, original))
         for duplicate in candidates[1:]:
@@ -103,13 +119,7 @@ def _plan_direction(settings, state, clients, snapshots, source, target, start, 
         if source_id in originals:
             continue
         original = clients[source].get_event(source_id)
-        if (
-            original
-            and original.busy
-            and not original.marker
-            and original.start < end
-            and original.end > start
-        ):
+        if original is not None and timing.desired_copy(source, original, start, end) is not None:
             raise SyncError(
                 "The source snapshot omitted an active event. No changes were applied; retry a complete sync."
             )
@@ -132,8 +142,10 @@ def synchronize(
     settings.validate()
     now = now or datetime.now(UTC)
     start, end = _window(settings, now)
+    timing = TimingPolicy(settings)
+    query_start, query_end = timing.query_window(start, end)
     # Both paginated views must complete before planning or writing anything.
-    snapshots = {name: client.list_events(start, end) for name, client in clients.items()}
+    snapshots = {name: client.list_events(query_start, query_end) for name, client in clients.items()}
     if set(snapshots) != {"google", "outlook"}:
         raise SyncError("Both calendar connections are required before syncing.")
     for events in snapshots.values():
@@ -148,7 +160,7 @@ def synchronize(
         operations = []
         for source, target in directions:
             operations.extend(
-                _plan_direction(settings, state, clients, snapshots, source, target, start, end)
+                _plan_direction(settings, state, clients, snapshots, source, target, start, end, timing)
             )
         for operation in operations:
             kind, mapping, original = operation.kind, operation.mapping, operation.event
@@ -173,13 +185,27 @@ def synchronize(
                     created = client.update_busy(created.id, original, mapping.marker)
                 _owned(created, mapping.marker)
                 state.remember(
-                    Mapping(mapping.source, mapping.source_id, mapping.target, created.id, mapping.marker)
+                    Mapping(
+                        mapping.source,
+                        mapping.source_id,
+                        mapping.target,
+                        created.id,
+                        mapping.marker,
+                        _CONTENT_VERSION,
+                    )
                 )
             elif kind == "updated":
                 updated = client.update_busy(mapping.target_id, original, mapping.marker)
                 _owned(updated, mapping.marker)
                 state.remember(
-                    Mapping(mapping.source, mapping.source_id, mapping.target, updated.id, mapping.marker)
+                    Mapping(
+                        mapping.source,
+                        mapping.source_id,
+                        mapping.target,
+                        updated.id,
+                        mapping.marker,
+                        _CONTENT_VERSION,
+                    )
                 )
             elif kind in ("deleted", "duplicate"):
                 client.delete_busy(mapping.target_id, mapping.marker)

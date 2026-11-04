@@ -46,6 +46,13 @@ def _event_marker_google(item: dict[str, Any]) -> str | None:
     return marker if isinstance(marker, str) and marker else None
 
 
+def _has_attendees(item: dict[str, Any]) -> bool:
+    attendees = item.get("attendees", [])
+    if not isinstance(attendees, list):
+        raise SyncError("Calendar returned invalid attendee information; no write was attempted.")
+    return bool(attendees) or item.get("attendeesOmitted") is True
+
+
 def _google_event(item: dict[str, Any], default_timezone: str | None = None) -> Event | None:
     if item.get("status") == "cancelled":
         return None
@@ -193,14 +200,20 @@ class GoogleCalendarClient(_HttpClient):
                 url = ""
         return out
 
-    def get_event(self, event_id: str) -> Event | None:
+    def _get_event_response(self, event_id: str) -> dict[str, Any]:
         response = self._request("GET", f"{self._base}/{quote(event_id, safe='')}", origin=_GOOGLE)
         if response.status_code in (404, 410):
-            return None
+            return {}
         self._check(response)
         item = self._json(response)
         if not isinstance(item, dict) or not isinstance(item.get("id"), str):
             raise SyncError("Calendar returned an invalid event.")
+        return item
+
+    def get_event(self, event_id: str) -> Event | None:
+        item = self._get_event_response(event_id)
+        if not item:
+            return None
         if "date" in item.get("start", {}) or "date" in item.get("end", {}):
             calendar_response = self._request(
                 "GET",
@@ -221,8 +234,10 @@ class GoogleCalendarClient(_HttpClient):
     def _body(event: Event, marker: str, event_id: str | None = None):
         body = {
             "summary": "Busy",
+            "description": "From work calendar.",
             "visibility": "private",
             "reminders": {"useDefault": False},
+            "attendees": [],
             "start": {"dateTime": _utc(event.start).isoformat()},
             "end": {"dateTime": _utc(event.end).isoformat()},
             "transparency": "opaque",
@@ -236,7 +251,13 @@ class GoogleCalendarClient(_HttpClient):
         event_id = (
             base64.b32hexencode(hashlib.sha256(marker.encode()).digest()).decode().lower().rstrip("=")[:40]
         )
-        response = self._request("POST", self._base, origin=_GOOGLE, body=self._body(event, marker, event_id))
+        response = self._request(
+            "POST",
+            self._base,
+            origin=_GOOGLE,
+            body=self._body(event, marker, event_id),
+            params={"sendUpdates": "none"},
+        )
         if response.status_code == 409:
             existing = self.get_event(event_id)
             if existing is None:
@@ -251,14 +272,17 @@ class GoogleCalendarClient(_HttpClient):
         return result
 
     def update_busy(self, event_id: str, event: Event, marker: str) -> Event:
-        current = self.get_event(event_id)
-        if current is None or current.marker != marker:
+        raw = self._get_event_response(event_id)
+        if _event_marker_google(raw) != marker:
             raise SyncError("Refusing to update an event not owned by this tool.")
+        if _has_attendees(raw):
+            raise SyncError("Refusing to update a copy with attendees.")
         response = self._request(
             "PATCH",
             f"{self._base}/{quote(event_id, safe='')}",
             origin=_GOOGLE,
             body=self._body(event, marker),
+            params={"sendUpdates": "none"},
         )
         self._check(response)
         result = _google_event(self._json(response))
@@ -267,12 +291,19 @@ class GoogleCalendarClient(_HttpClient):
         return result
 
     def delete_busy(self, event_id: str, marker: str) -> None:
-        current = self.get_event(event_id)
-        if current is None:
+        raw = self._get_event_response(event_id)
+        if not raw or raw.get("status") == "cancelled":
             return
-        if current.marker != marker:
+        if _event_marker_google(raw) != marker:
             raise SyncError("Refusing to delete an event not owned by this tool.")
-        response = self._request("DELETE", f"{self._base}/{quote(event_id, safe='')}", origin=_GOOGLE)
+        if _has_attendees(raw):
+            raise SyncError("Refusing to delete a copy with attendees.")
+        response = self._request(
+            "DELETE",
+            f"{self._base}/{quote(event_id, safe='')}",
+            origin=_GOOGLE,
+            params={"sendUpdates": "none"},
+        )
         if response.status_code not in (404, 410):
             self._check(response)
 
@@ -330,17 +361,23 @@ class OutlookCalendarClient(_HttpClient):
             params = None
         return out
 
-    def get_event(self, event_id: str) -> Event | None:
-        url = f"{self._base}/{quote(event_id, safe='')}?$expand=singleValueExtendedProperties($filter=id eq '{GRAPH_PROPERTY_ID}')&$select=id,start,end,isCancelled,showAs,singleValueExtendedProperties"
+    def _get_event_response(self, event_id: str) -> dict[str, Any]:
+        url = f"{self._base}/{quote(event_id, safe='')}?$expand=singleValueExtendedProperties($filter=id eq '{GRAPH_PROPERTY_ID}')&$select=id,start,end,isCancelled,showAs,attendees,singleValueExtendedProperties"
         response = self._request(
             "GET", url, origin=_GRAPH, extra_headers={"Prefer": 'outlook.timezone="UTC"'}
         )
         if response.status_code in (404, 410):
-            return None
+            return {}
         self._check(response)
         item = self._json(response)
         if not isinstance(item, dict) or not isinstance(item.get("id"), str):
             raise SyncError("Calendar returned an invalid event.")
+        return item
+
+    def get_event(self, event_id: str) -> Event | None:
+        item = self._get_event_response(event_id)
+        if not item:
+            return None
         try:
             return _graph_event(item)
         except (KeyError, TypeError, ValueError, SyncError):
@@ -350,8 +387,12 @@ class OutlookCalendarClient(_HttpClient):
     def _body(event: Event, marker: str, transaction_id: str | None = None):
         body = {
             "subject": "Busy",
+            "body": {"contentType": "text", "content": "From personal calendar."},
             "sensitivity": "private",
             "isReminderOn": False,
+            "attendees": [],
+            "isOnlineMeeting": False,
+            "responseRequested": False,
             "start": {"dateTime": _utc(event.start).isoformat(), "timeZone": "UTC"},
             "end": {"dateTime": _utc(event.end).isoformat(), "timeZone": "UTC"},
             "showAs": "busy",
@@ -380,9 +421,11 @@ class OutlookCalendarClient(_HttpClient):
         return result
 
     def update_busy(self, event_id: str, event: Event, marker: str) -> Event:
-        current = self.get_event(event_id)
-        if current is None or current.marker != marker:
+        raw = self._get_event_response(event_id)
+        if _marker_graph(raw) != marker:
             raise SyncError("Refusing to update an event not owned by this tool.")
+        if _has_attendees(raw):
+            raise SyncError("Refusing to update a copy with attendees.")
         response = self._request(
             "PATCH",
             f"{self._base}/{quote(event_id, safe='')}",
@@ -397,11 +440,13 @@ class OutlookCalendarClient(_HttpClient):
         return result
 
     def delete_busy(self, event_id: str, marker: str) -> None:
-        current = self.get_event(event_id)
-        if current is None:
+        raw = self._get_event_response(event_id)
+        if not raw or raw.get("isCancelled"):
             return
-        if current.marker != marker:
+        if _marker_graph(raw) != marker:
             raise SyncError("Refusing to delete an event not owned by this tool.")
+        if _has_attendees(raw):
+            raise SyncError("Refusing to delete a copy with attendees.")
         response = self._request("DELETE", f"{self._base}/{quote(event_id, safe='')}", origin=_GRAPH)
         if response.status_code not in (404, 410):
             self._check(response)

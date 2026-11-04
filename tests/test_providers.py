@@ -116,14 +116,17 @@ class ProviderTests(unittest.TestCase):
             payload,
             {
                 "summary": "Busy",
+                "description": "From work calendar.",
                 "visibility": "private",
                 "reminders": {"useDefault": False},
+                "attendees": [],
                 "start": {"dateTime": START.isoformat()},
                 "end": {"dateTime": END.isoformat()},
                 "transparency": "opaque",
                 "extendedProperties": {"private": {"calendar-busy-sync": "owner"}},
             },
         )
+        self.assertEqual(session.calls[0][2]["params"], {"sendUpdates": "none"})
 
     def test_outlook_copy_posts_only_anonymous_private_busy_content(self):
         returned = {
@@ -146,14 +149,96 @@ class ProviderTests(unittest.TestCase):
             payload,
             {
                 "subject": "Busy",
+                "body": {"contentType": "text", "content": "From personal calendar."},
                 "sensitivity": "private",
                 "isReminderOn": False,
+                "attendees": [],
+                "isOnlineMeeting": False,
+                "responseRequested": False,
                 "showAs": "busy",
                 "start": {"dateTime": START.isoformat(), "timeZone": "UTC"},
                 "end": {"dateTime": END.isoformat(), "timeZone": "UTC"},
                 "singleValueExtendedProperties": [{"id": GRAPH_PROPERTY_ID, "value": "owner"}],
             },
         )
+
+    def test_guest_bearing_owned_copies_are_never_updated_or_deleted(self):
+        cases = [
+            (
+                GoogleCalendarClient,
+                {
+                    "id": "copy",
+                    "extendedProperties": {"private": {"calendar-busy-sync": "owner"}},
+                    "attendees": [{"email": "guest@example.invalid"}],
+                },
+            ),
+            (
+                OutlookCalendarClient,
+                {
+                    "id": "copy",
+                    "singleValueExtendedProperties": [{"id": GRAPH_PROPERTY_ID, "value": "owner"}],
+                    "attendees": [{"emailAddress": {"address": "guest@example.invalid"}}],
+                },
+            ),
+        ]
+        for provider, existing in cases:
+            with self.subTest(provider=provider.__name__):
+                session = ScriptedSession([response(existing), response(existing)])
+                client = provider("synthetic-token", session=session)
+                with self.assertRaises(SyncError):
+                    client.update_busy("copy", Event("source", START, END), "owner")
+                with self.assertRaises(SyncError):
+                    client.delete_busy("copy", "owner")
+                self.assertEqual([call[0] for call in session.calls], ["GET", "GET"])
+                if provider is OutlookCalendarClient:
+                    self.assertIn("attendees", session.calls[0][1].split("$select=")[1].split(","))
+
+    def test_owned_copies_can_refresh_notes_and_be_deleted_without_guests(self):
+        for provider in (GoogleCalendarClient, OutlookCalendarClient):
+            with self.subTest(provider=provider.__name__):
+                if provider is GoogleCalendarClient:
+                    existing = {
+                        "id": "copy",
+                        "start": {"dateTime": START.isoformat()},
+                        "end": {"dateTime": END.isoformat()},
+                        "attendees": [],
+                        "extendedProperties": {"private": {"calendar-busy-sync": "owner"}},
+                    }
+                    responses = [
+                        response(existing),
+                        response(existing),
+                        response(existing),
+                        response({}, 204),
+                    ]
+                else:
+                    existing = {
+                        "id": "copy",
+                        "start": {"dateTime": START.isoformat(), "timeZone": "UTC"},
+                        "end": {"dateTime": END.isoformat(), "timeZone": "UTC"},
+                        "attendees": [],
+                        "singleValueExtendedProperties": [{"id": GRAPH_PROPERTY_ID, "value": "owner"}],
+                    }
+                    responses = [
+                        response(existing),
+                        response({}, 200),
+                        response(existing),
+                        response(existing),
+                        response({}, 204),
+                    ]
+                session = ScriptedSession(responses)
+                client = provider("synthetic-token", session=session)
+                result = client.update_busy("copy", Event("source", START, END), "owner")
+                client.delete_busy("copy", "owner")
+                self.assertEqual(result, Event("copy", START, END, marker="owner"))
+                payload = session.calls[1][2]["json"]
+                if provider is GoogleCalendarClient:
+                    self.assertEqual(payload["description"], "From work calendar.")
+                    self.assertEqual(session.calls[-1][2]["params"], {"sendUpdates": "none"})
+                else:
+                    self.assertEqual(
+                        payload["body"], {"contentType": "text", "content": "From personal calendar."}
+                    )
+                self.assertEqual([call[0] for call in session.calls if call[0] != "GET"], ["PATCH", "DELETE"])
 
     def test_cancelled_google_identifier_requires_a_new_generation_without_restoring_it(self):
         session = ScriptedSession(
