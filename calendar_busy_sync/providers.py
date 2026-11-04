@@ -327,11 +327,12 @@ class OutlookCalendarClient(_HttpClient):
         start, end = _utc(start), _utc(end)
         if end <= start:
             raise SyncError("Invalid calendar range.")
+        # calendarView can suppress extended-property expansion with $select.
+        # Keep the ownership marker; _graph_event discards private event details.
         params = {
             "startDateTime": start.isoformat(),
             "endDateTime": end.isoformat(),
             "$expand": f"singleValueExtendedProperties($filter=id eq '{GRAPH_PROPERTY_ID}')",
-            "$select": "id,start,end,isCancelled,showAs,singleValueExtendedProperties",
         }
         url, out, seen_urls = self._view, [], set()
         while url:

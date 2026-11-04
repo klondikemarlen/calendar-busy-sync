@@ -76,6 +76,35 @@ class ProviderTests(unittest.TestCase):
             },
         )
 
+    def test_outlook_view_preserves_copy_ownership_when_select_suppresses_expansion(self):
+        class CalendarViewSession:
+            def request(self, method, url, **kwargs):
+                owned = {
+                    "id": "owned-copy",
+                    "subject": "Busy",
+                    "body": {"contentType": "text", "content": "SYNTHETIC PRIVATE CONTENT"},
+                    "start": {"dateTime": START.isoformat(), "timeZone": "UTC"},
+                    "end": {"dateTime": END.isoformat(), "timeZone": "UTC"},
+                    "singleValueExtendedProperties": [{"id": GRAPH_PROPERTY_ID, "value": "owner"}],
+                }
+                # Graph calendarView omits the expansion when top-level $select is present.
+                if "$select" in kwargs.get("params", {}):
+                    del owned["singleValueExtendedProperties"]
+                original = {
+                    "id": "original",
+                    "start": {"dateTime": START.isoformat(), "timeZone": "UTC"},
+                    "end": {"dateTime": END.isoformat(), "timeZone": "UTC"},
+                }
+                return response({"value": [owned, original]})
+
+        events = OutlookCalendarClient("synthetic-token", session=CalendarViewSession()).list_events(
+            START, END
+        )
+        self.assertEqual(
+            events,
+            [Event("owned-copy", START, END, marker="owner"), Event("original", START, END)],
+        )
+
     def test_outlook_continuation_cannot_send_bearer_to_another_origin(self):
         session = ScriptedSession(
             [response({"value": [], "@odata.nextLink": "https://example.invalid/steal"})]
