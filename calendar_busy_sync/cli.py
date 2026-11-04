@@ -139,6 +139,15 @@ def _setup(paths: settings.Paths) -> int:
             microsoft_client_id=ms_id,
             microsoft_tenant=tenant,
         )
+        try:
+            current.days_back = int(_prompt("Sync look-back days (0-365)", default=str(current.days_back)))
+            current.days_forward = int(
+                _prompt(
+                    "Sync look-ahead days (1-730; 60 is about two months)", default=str(current.days_forward)
+                )
+            )
+        except ValueError:
+            raise models.SyncError("Sync horizon days must be whole numbers.") from None
         if _yes_no("Configure work hours and event padding?", default=False):
             current = _configure_timing(current)
         current.validate()

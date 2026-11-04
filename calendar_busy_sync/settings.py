@@ -84,7 +84,7 @@ class Settings:
     microsoft_tenant: str = "organizations"
     installation_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     days_back: int = 7
-    days_forward: int = 365
+    days_forward: int = 60
     work_hours_enabled: bool = False
     work_timezone: str = "UTC"
     work_days: list[str] = field(default_factory=lambda: ["mon", "tue", "wed", "thu", "fri"])

@@ -171,6 +171,26 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(self.sync()["deleted"], 1)
         self.assertEqual(set(self.outlook.events), {"work"})
 
+    def test_horizon_limits_copies_and_respects_configured_days(self):
+        self.google.events = {
+            "recent": event("recent", -24 * 6),
+            "near": event("near", 24 * 59),
+            "distant": event("distant", 24 * 90),
+            "old": event("old", -24 * 8),
+        }
+        self.sync()
+        with State(self.paths) as state:
+            self.assertEqual(
+                {row.source_id for row in state.mappings("google", "outlook")}, {"recent", "near"}
+            )
+        self.settings.days_back = 0
+        self.settings.days_forward = 100
+        self.sync()
+        with State(self.paths) as state:
+            self.assertEqual(
+                {row.source_id for row in state.mappings("google", "outlook")}, {"near", "distant"}
+            )
+
     def test_dry_run_does_not_write_calendars_or_authorize_a_schedule(self):
         self.assertEqual(self.sync(dry_run=True)["created"], 1)
         self.assertEqual(self.outlook.writes, [])
