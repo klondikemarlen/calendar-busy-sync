@@ -19,7 +19,7 @@ The repository includes native Debian source packaging, but **no Launchpad PPA h
 
 Before a public PPA:
 
-1. The copyright owner must choose an appropriate redistribution license. Public GitHub visibility alone grants no open-source license; the package currently records that no license has been selected. Do not invent a license on the owner's behalf.
+1. The copyright owner has selected the [MIT license](../LICENSE). Preserve its copyright and permission notice in redistributed artifacts; Debian records the same license as `Expat` in `debian/copyright`.
 2. Complete the real Google/Microsoft authorization, busy-only lifecycle, and coworker Scheduling Assistant acceptance checks. A package-build PASS is not live-calendar proof.
 3. Configure an owned Launchpad account/PPA and its signing key, select the Ubuntu series, and verify that the declared Python dependencies exist for it.
 4. Build and sign that exact source version. Signing and uploading are explicit maintainer actions; never retrigger an opaque signing prompt or claim upload success from an unsigned local build.
