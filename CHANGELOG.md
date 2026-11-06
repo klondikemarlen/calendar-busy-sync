@@ -2,10 +2,30 @@
 
 ## Unreleased
 
+## [1.0.0](https://github.com/klondikemarlen/calendar-busy-sync/releases/tag/v1.0.0) - 2026-11-06
+
+### Changed
+
+- Mark the existing busy-only synchronization workflow as the first stable release; preserve saved configuration, ownership state and managed schedules without migration.
+- Replace pre-publication setup guidance with PPA installation and upgrade instructions.
+
+### Fixed
+
+- Include the upstream changelog in Debian source archives and installed packages.
+
+### Known Limitations
+
+- Coworker Scheduling Assistant visibility has not been independently observed. The maintainer accepted this release limitation; issue #1 remains open. Live disposable-event lifecycle checks passed separately in both directions.
+- Scheduling requires the computer to be awake and online. OAuth consent and tenant policy remain account-specific; installation does not authorize accounts or enable jobs.
+
+## 0.1.0 - 2026-11-05
+
+### Added
+
 - Direct Google Calendar and Microsoft Graph busy-only mirroring, with explicit one-way or reciprocal direction and private ownership metadata.
 - Guided terminal setup, interactive authorization, read-only connection checks, manual/dry-run synchronization and opt-in user-crontab controls.
 - Private local credential/state storage, durable reconciliation references and exclusion of owned copies from reverse sync.
-- Locally buildable Debian binary/source packages and an initial Ubuntu 26.04 source candidate (`0.1.0+resolute1`). The Launchpad archive exists; package publication and PPA install verification remain pending.
+- Locally buildable Debian binary/source packages and an Ubuntu 26.04 PPA package (`0.1.0+resolute1`), published on November 5. Signed-PPA installation and installed setup/sync/scheduling checks were verified on November 6.
 - Suggest Google Cloud CLI and Azure CLI as optional Debian setup aids, and recommend Python virtual-environment support for temporary Azure installation; normal authorization and sync remain independent of both CLIs.
 - Offer just-in-time registration assistance in interactive setup: reuse installed CLIs, confirm temporary downloads when missing, and remove setup-owned tooling and administrative login data after use. Preserve application credentials, external registrations and global installations.
 - Filter copies by configurable local workdays/hours and independent work-window margins; keep full eligible intervals rather than clipping them.
