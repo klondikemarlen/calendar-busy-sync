@@ -1,8 +1,14 @@
 # calendar-busy-sync
 
-Project goal: mirror unavailable time between Google Calendar and Outlook as anonymous Busy appointments, using a local command-line workflow rather than a paid service or calendar feed.
+Mirror unavailable time between Google Calendar and Outlook as private, anonymous Busy appointments. Calendar Busy Sync is a local Python CLI: no hosted sync service or calendar feed is required. Google-to-Outlook is the default; reciprocal sync is explicitly opt-in.
 
-Development is tracked in [issue #1](https://github.com/klondikemarlen/calendar-busy-sync/issues/1). Real-account integration and release verification are not complete. See [local setup and operation](docs/usage.md), [Debian packages and PPA prerequisites](docs/packaging.md), and [project guidance](AGENTS.md).
+## Install and Use
+
+On Ubuntu 26.04, install from the [project PPA](https://launchpad.net/~klondikemarlen/+archive/ubuntu/calendar-busy-sync) using the [installation and upgrade instructions](docs/packaging.md#install-from-the-ppa). Installation does not authorize accounts, synchronize events, or enable scheduling.
+
+Run `calendar-busy-sync setup` in a terminal for guided configuration, then follow [local setup and operation](docs/usage.md). Scheduling is opt-in after a successful sync of the current configuration. The computer must be awake and online; Busy status does not prevent someone from sending a conflicting invitation.
+
+See the [changelog](CHANGELOG.md) for release history and [project guidance](AGENTS.md) for contribution rules. Live disposable-event lifecycle checks passed in both directions. Coworker Scheduling Assistant visibility remains unverified and was accepted by the maintainer as a release limitation; [issue #1](https://github.com/klondikemarlen/calendar-busy-sync/issues/1) remains open for that observation.
 
 ## Automated Checks
 

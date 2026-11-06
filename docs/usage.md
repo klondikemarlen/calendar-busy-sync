@@ -1,10 +1,10 @@
 # Local Setup and Operation
 
-These are procedures for development builds. The real-account acceptance check in [issue #1](https://github.com/klondikemarlen/calendar-busy-sync/issues/1) must be completed before claiming the integration works for a particular Google account and Microsoft tenant. Automated fixtures do not prove provider consent or coworkers' free/busy visibility.
+These procedures cover installed releases and development builds. Google and Microsoft authorization depends on the selected accounts and tenant policy. Automated fixtures do not prove provider consent or coworkers' free/busy visibility. The outstanding coworker observation is tracked in [issue #1](https://github.com/klondikemarlen/calendar-busy-sync/issues/1); it remains unverified despite maintainer acceptance for release.
 
 ## Install and Inspect
 
-For a locally built Debian package, use `sudo apt install ./dist/calendar-busy-sync_0.1.0_all.deb`. APT resolves the Python authentication dependencies and cron. Installation does not change your calendars or crontab.
+On Ubuntu 26.04, follow [PPA installation](packaging.md#install-from-the-ppa). For a locally built Debian package, run `make deb`, then `sudo apt install ./dist/calendar-busy-sync_1.0.0+resolute1_all.deb`. APT resolves the Python authentication dependencies and cron. Installation does not change your calendars or crontab.
 
 For development, run `make dev`, then `.venv/bin/calendar-busy-sync --help`. The runtime requires Python 3.11 or newer. `make lint`, `make format-check`, and `make test` are the supported checks. Development virtual environments/checkouts are not intended as a durable cron installation.
 

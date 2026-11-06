@@ -15,7 +15,7 @@ binary-indep: build-indep
 	install -m 644 calendar_busy_sync/*.py $(ROOT)/usr/lib/python3/dist-packages/calendar_busy_sync/
 	install -m 755 debian/calendar-busy-sync-cli $(ROOT)/usr/bin/calendar-busy-sync
 	install -d $(ROOT)/usr/share/doc/$(PACKAGE) $(ROOT)/DEBIAN
-	install -m 644 README.md debian/copyright docs/*.md $(ROOT)/usr/share/doc/$(PACKAGE)/
+	install -m 644 README.md CHANGELOG.md debian/copyright docs/*.md $(ROOT)/usr/share/doc/$(PACKAGE)/
 	install -m 755 debian/prerm $(ROOT)/DEBIAN/prerm
 	gzip -n -9 -c debian/changelog > $(ROOT)/usr/share/doc/$(PACKAGE)/changelog.gz
 	dpkg-gencontrol -p$(PACKAGE) -P$(ROOT)
