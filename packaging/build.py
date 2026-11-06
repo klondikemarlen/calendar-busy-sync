@@ -28,7 +28,7 @@ def main():
         # Public source inputs only; never copy an arbitrary checkout/credential file.
         for name in ("calendar_busy_sync", "debian", "docs", "packaging", "tests"):
             shutil.copytree(root / name, source / name, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-        for name in ("pyproject.toml", "Makefile", "README.md", "LICENSE"):
+        for name in ("pyproject.toml", "Makefile", "README.md", "CHANGELOG.md", "LICENSE"):
             shutil.copy2(root / name, source / name)
         command = ["dpkg-buildpackage", "--no-sign", "--build=" + args.kind]
         subprocess.run(command, cwd=source, check=True)
