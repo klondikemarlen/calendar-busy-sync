@@ -125,6 +125,86 @@ Package upgrades preserve the managed job and its interval. Each execution start
 
 The computer must be awake, online, and running cron. Missed cron executions are not automatically replayed; run `calendar-busy-sync sync` when you need immediate reconciliation. Busy status informs scheduling but does not prevent someone from sending a conflicting invitation.
 
+## Backup and Reinstall
+
+For an existing installation, restore its identity and ownership records rather than starting setup from scratch. These Linux steps use `flock` from util-linux and ordinary file copies; they do not require cloud administration tools. Keep only one computer syncing this installation: its lock coordinates local processes, not two machines.
+
+### Save a Consistent Private Backup
+
+Use the same XDG environment as your normal sync commands. If you configured custom storage roots, export those exact `XDG_CONFIG_HOME` and `XDG_STATE_HOME` values first. Record your schedule interval privately; the example below disables only this tool's managed job. It does not export or back up unrelated crontab entries.
+
+Set `cbs` to the installed executable you actually use: `calendar-busy-sync` for the PPA, or the full virtual-environment path from the [wheel installation instructions](packaging.md#install-a-released-wheel-without-the-ppa).
+
+```sh
+(
+  set -eu
+  umask 077
+  cbs=calendar-busy-sync
+  config="${XDG_CONFIG_HOME:-$HOME/.config}/calendar-busy-sync"
+  state="${XDG_STATE_HOME:-$HOME/.local/state}/calendar-busy-sync"
+  backup="$HOME/calendar-busy-sync-backup-$(date +%Y%m%d-%H%M%S)"
+  test -f "$config/config.json"
+  test -f "$state/sync.sqlite3"
+  "$cbs" schedule disable
+  mkdir "$backup"
+  flock --nonblock "$state/sync.lock" sh -c \
+    'cp -a "$1" "$3/config" && cp -a "$2" "$3/state"' \
+    sh "$config" "$state" "$backup"
+  chmod -R go-rwx "$backup"
+  "$cbs" --version > "$backup/version.txt"
+  touch "$backup/COMPLETE"
+  printf 'Completed private backup: %s\n' "$backup"
+)
+```
+
+Do not run setup, authorization, or manual sync while backing up. Disabling scheduling does not terminate a running sync; if it or lock acquisition reports contention, let the current operation finish and retry with a new backup directory. Any failure leaves the backup incomplete: use only a directory with `COMPLETE`. The lock keeps configuration, token files, and SQLite ownership records from changing during the copy. Both directories are needed: `config/` includes `config.json` (with `installation_id`) and `google-client.json`; `state/` includes provider tokens and `sync.sqlite3`.
+
+The backup contains credentials and private calendar identifiers. Owner-only permissions are **not encryption**. Store it on encrypted backup storage outside Git, restrict access, and never attach it to an issue. Keep a second protected copy off the machine before reinstalling. Save the [public reinstall kit](packaging.md#keep-a-reinstall-kit) too; a backup of a Python virtual environment is not a portable installer.
+
+If you are only making a periodic backup, re-enable your recorded schedule after confirming the backup completed. For a migration, leave the old machine's job disabled and do not run manual sync there after cutover.
+
+### Restore Before Setup or Scheduling
+
+Install the recorded release first, using the [PPA or released wheel](packaging.md). On the new machine, select your intended XDG roots and restore **before** setup, authorization, or sync. The following deliberately refuses existing destination directories, including empty ones; do not delete existing data just to make it pass. If this is a package reinstall on the same machine and your files survived, skip copying and use those existing files instead.
+
+Replace the backup path with your completed private backup. Run as your normal user, not root:
+
+```sh
+(
+  set -eu
+  umask 077
+  backup="$HOME/calendar-busy-sync-backup-YYYYMMDD-HHMMSS"
+  config="${XDG_CONFIG_HOME:-$HOME/.config}/calendar-busy-sync"
+  state="${XDG_STATE_HOME:-$HOME/.local/state}/calendar-busy-sync"
+  test -f "$backup/COMPLETE"
+  test -f "$backup/config/config.json"
+  test -f "$backup/state/sync.sqlite3"
+  test ! -e "$config"
+  test ! -L "$config"
+  test ! -e "$state"
+  test ! -L "$state"
+  mkdir -p "$(dirname "$config")" "$(dirname "$state")"
+  cp -a "$backup/config" "$config"
+  cp -a "$backup/state" "$state"
+  chmod -R go-rwx "$config" "$state"
+)
+```
+
+Stop on any error and preserve both the backup and any partial destination for inspection; do not merge an incomplete restore into a different installation. Do not edit `installation_id` or discard `sync.sqlite3`. Restoring these records lets later runs update or remove the existing owned Busy copies instead of treating them as a new installation. If either is lost or corrupt, preserve what remains and review recovery before syncing; creating a new identity can leave old copies orphaned.
+
+Use the **new installation's** executable for the following read-only checks:
+
+```sh
+calendar-busy-sync --version
+calendar-busy-sync status
+calendar-busy-sync doctor
+calendar-busy-sync sync --dry-run
+```
+
+Substitute the full wheel-installed path if applicable. A restored `last_success` is historical, not evidence that the new machine can connect. If credentials have expired or were revoked, run `calendar-busy-sync auth google` or `calendar-busy-sync auth outlook` for the affected provider, then repeat the checks; do not create new cloud registrations merely because a token expired. A dry run can legitimately show changes since the backup, but unexpected wholesale creation or deletion needs investigation before proceeding.
+
+After reviewing the preview, run one successful `calendar-busy-sync sync`. Only then enable your chosen schedule, for example `calendar-busy-sync schedule enable --minutes 5`, and check `calendar-busy-sync schedule status`. Do not import the old managed cron block: it contains the old interpreter path and storage roots. Re-enabling with the new executable regenerates these while preserving unrelated jobs. Never reactivate the old machine alongside the restored one.
+
 ## Privacy, Ownership and Horizon
 
 Configuration is stored under `${XDG_CONFIG_HOME:-~/.config}/calendar-busy-sync`; credentials, SQLite references and lock files are under `${XDG_STATE_HOME:-~/.local/state}/calendar-busy-sync`. Directories are owner-only and credential/state files are private. Never commit or share these files. Preserve the configuration's installation identity and sync database; discarding ownership state can leave anonymous orphan copies that require manual review.
