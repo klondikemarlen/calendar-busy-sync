@@ -8,6 +8,8 @@ Visit the [project homepage](https://klondikemarlen.github.io/calendar-busy-sync
 
 On Ubuntu 26.04, install from the [project PPA](https://launchpad.net/~klondikemarlen/+archive/ubuntu/calendar-busy-sync) using the [installation and upgrade instructions](docs/packaging.md#install-from-the-ppa). Installation does not authorize accounts, synchronize events, or enable scheduling.
 
+For a Linux installation without the PPA, use the [released wheel instructions](docs/packaging.md#install-a-released-wheel-without-the-ppa). Before replacing your computer or operating system, follow [backup and reinstall](docs/usage.md#backup-and-reinstall) to retain credentials and ownership of existing Busy copies. Keep a [reinstall kit](docs/packaging.md#keep-a-reinstall-kit) separately from the private backup. Native Windows and macOS support is not yet verified.
+
 Run `calendar-busy-sync setup` in a terminal for guided configuration, then follow [local setup and operation](docs/usage.md). Scheduling is opt-in after a successful sync of the current configuration. The computer must be awake and online; Busy status does not prevent someone from sending a conflicting invitation.
 
 See the [changelog](CHANGELOG.md) for release history and [project guidance](AGENTS.md) for contribution rules. Live disposable-event lifecycle checks passed in both directions. Coworker Scheduling Assistant visibility remains unverified and was accepted by the maintainer as a release limitation; [issue #1](https://github.com/klondikemarlen/calendar-busy-sync/issues/1) remains open for that observation.

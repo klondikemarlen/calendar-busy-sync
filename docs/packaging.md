@@ -37,6 +37,61 @@ calendar-busy-sync schedule status
 
 An upgrade preserves configuration, credentials, ownership state and the managed schedule. The next scheduled execution loads the new code; an already-running process may finish with the old code. Do not repeat authorization or setup merely to upgrade. For a new installation, follow [local setup and operation](usage.md); account authorization, first synchronization and scheduling are separate opt-in steps.
 
+## Install a Released Wheel Without the PPA
+
+This is an alternative Linux installation, not a claim of native Windows or macOS support. Version 1.0 uses Unix file locking and permissions, and its scheduler requires `crontab`. Ubuntu 26.04 is the verified package platform; other Linux distributions need their own Python 3.11+ interpreter, virtual-environment support, timezone database, and cron for optional scheduling. The `py3-none-any` wheel filename describes packaging, not operating-system compatibility.
+
+Start with the [published releases](https://github.com/klondikemarlen/calendar-busy-sync/releases). The following selects the existing **v1.0.0** release explicitly; when choosing another release, use its actual asset names and checksum manifest. Run this in a terminal, outside a Git checkout:
+
+```sh
+(
+  set -eu
+  umask 077
+  download="$HOME/Downloads/calendar-busy-sync-v1.0.0"
+  mkdir -p "$download"
+  cd "$download"
+  release="https://github.com/klondikemarlen/calendar-busy-sync/releases/download/v1.0.0"
+  curl --fail --location --output calendar_busy_sync-1.0.0-py3-none-any.whl \
+    "$release/calendar_busy_sync-1.0.0-py3-none-any.whl"
+  curl --fail --location --output SHA256SUMS-v1.0.0 \
+    "$release/SHA256SUMS-v1.0.0"
+  sha256sum --check --ignore-missing SHA256SUMS-v1.0.0
+  python3 -m venv "$HOME/.local/share/calendar-busy-sync/venv"
+  "$HOME/.local/share/calendar-busy-sync/venv/bin/python" -m pip install \
+    ./calendar_busy_sync-1.0.0-py3-none-any.whl
+  "$HOME/.local/share/calendar-busy-sync/venv/bin/calendar-busy-sync" --version
+)
+```
+
+Prerequisites for these download commands are `curl` and GNU `sha256sum`. Stop if a command fails; do not bypass a checksum mismatch. The checksum detects damaged or mismatched downloads, not compromise of the release account. Dependency installation normally needs internet access. Do not use `sudo pip` or copy an old virtual environment to a new machine: rebuild it at its final, durable location.
+
+Use the full `~/.local/share/calendar-busy-sync/venv/bin/calendar-busy-sync` path for subsequent commands, or deliberately add that `bin` directory to your shell's `PATH`. If a system package is also installed, do not accidentally invoke its CLI when rebuilding the wheel installation's schedule. Installation does not authorize accounts or enable a job. A new user continues with [setup](usage.md#guided-setup); an existing user should [restore their backup](usage.md#backup-and-reinstall) **before** running setup.
+
+### Keep a Reinstall Kit
+
+Keep the downloaded wheel, checksum manifest, release source archive, these instructions, and the output of the following beside your private backup. The release files are public; the [configuration and token backup](usage.md#backup-and-reinstall) is not.
+
+```sh
+"$HOME/.local/share/calendar-busy-sync/venv/bin/python" --version
+"$HOME/.local/share/calendar-busy-sync/venv/bin/python" -m pip freeze
+```
+
+For an offline reinstall on the **same OS, architecture, and Python version**, save the freeze output to `requirements.txt` and download its dependencies while they are available:
+
+```sh
+(
+  set -eu
+  cd "$HOME/Downloads/calendar-busy-sync-v1.0.0"
+  "$HOME/.local/share/calendar-busy-sync/venv/bin/python" -m pip freeze > requirements.txt
+  "$HOME/.local/share/calendar-busy-sync/venv/bin/python" -m pip download \
+    --only-binary=:all: --dest wheelhouse --requirement requirements.txt
+)
+```
+
+Keep `wheelhouse/` with the kit. On that matching platform, create a fresh virtual environment and install with `python -m pip install --no-index --find-links /path/to/kit/wheelhouse calendar-busy-sync==1.0.0` using that environment's Python. If the download cannot supply a wheel for a dependency, the offline kit is incomplete; do not treat the application's wheel alone as a dependency backup. For a different platform or Python version, resolve compatible dependencies online instead.
+
+No archived package guarantees Google/Microsoft API compatibility or valid authorization five years later. Keep control of the original cloud projects, account recovery methods, and support email; record the project/application IDs and selected calendars privately. Reauthorize when necessary rather than assuming saved refresh tokens remain valid indefinitely.
+
 ## Release Requirements
 
 Before publishing a new version:
