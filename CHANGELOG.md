@@ -6,6 +6,10 @@
 
 - Publish a free GitHub Pages homepage and privacy policy describing local calendar processing, provider transfers, storage, and deletion controls.
 
+### Changed
+
+- Route website support and privacy requests through the dedicated support group instead of publishing the maintainer's personal email address.
+
 ## [1.0.0](https://github.com/klondikemarlen/calendar-busy-sync/releases/tag/v1.0.0) - 2026-11-06
 
 ### Changed
