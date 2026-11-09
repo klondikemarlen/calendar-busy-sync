@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="How Calendar Busy Sync accesses, uses, stores, shares, and deletes Google Calendar and Microsoft Outlook data.">
+  <title>Privacy policy — Calendar Busy Sync</title>
+  <link rel="icon" type="image/png" href="../logo.png">
+  <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <a class="brand" href="../"><img src="../logo.png" width="44" height="44" alt="">Calendar Busy Sync</a>
+    <nav aria-label="Main navigation">
+      <a href="../#install">Install</a>
+      <a href="./" aria-current="page">Privacy</a>
+      <a href="https://github.com/klondikemarlen/calendar-busy-sync">Source code</a>
+    </nav>
+  </header>
+  <main id="main" class="policy">
+    <p class="eyebrow">Your data and your control</p>
+    <h1>Privacy policy</h1>
+    <p class="lede">Calendar Busy Sync is a local, open-source calendar synchronization tool maintained by Marlen Brunner. There is no Calendar Busy Sync account or hosted calendar-processing service.</p>
+    <p>Effective date: <time datetime="2026-11-09">November 9, 2026</time>. This policy covers the official Calendar Busy Sync CLI and this project website.</p>
+
+    <h2>What the application accesses</h2>
+    <p>After you explicitly authorize your accounts, the CLI reads the selected Google and Outlook calendars to determine busy intervals, identify its own copies, and reconcile changes. It processes event identifiers, start/end times and time zones, availability and cancellation status, and ownership metadata.</p>
+    <p>Google event-list requests select the fields needed for synchronization. Individual Google event reads and Microsoft calendar-view responses can contain additional event details, including titles, descriptions, locations, or attendees. Those responses are processed locally; source event descriptions and other personal content are not copied into destination Busy appointments or stored in the synchronization database. Attendee information is checked before changing existing copies to avoid sending meeting updates.</p>
+    <ul>
+      <li><strong>Google → Outlook:</strong> requests Google <code>calendar.readonly</code>. This permission can read calendars accessible to your Google account, although synchronization uses the calendar you select.</li>
+      <li><strong>Optional reciprocal mode:</strong> additionally requests Google <code>calendar.events</code> so the application can create, update, and delete its owned Busy copies in Google.</li>
+      <li><strong>Microsoft:</strong> requests delegated Microsoft Graph <code>Calendars.ReadWrite</code> and sign-in/offline-access permissions handled by its authentication library. Your organization may require approval.</li>
+    </ul>
+    <p>The calendar application does not request Gmail, Google Drive, Google Contacts, or birth-date access. Optional registration helpers use a separate, explicitly approved administrative sign-in to create application registrations; those administrative tokens are not reused for calendar synchronization.</p>
+
+    <h2>How data is used and shared</h2>
+    <p>Calendar data is used only to provide the synchronization you configure: computing busy intervals, applying your optional work-hour filters and event padding, and creating, updating, or deleting owned copies. Original calendar events are not edited.</p>
+    <p>For Google → Outlook, the application sends the resulting time interval to Microsoft as a private event named “Busy,” with Busy availability, a fixed “From personal calendar.” note, and ownership metadata. Reciprocal mode sends the corresponding information to Google with a fixed “From work calendar.” note. Ownership metadata includes an installation identifier and a derived source reference so the application can recognize its copies. Copies do not include the original title, description, location, attendees, meeting links, or reminders.</p>
+    <p>These copies are stored by the destination calendar provider. Their times and availability may be visible under your calendar-sharing settings and organization’s policies; marking an event private is not a guarantee against access by your account provider or organization’s administrators.</p>
+    <p>The maintainer does not receive your calendar data or OAuth tokens through normal application operation. Calendar Busy Sync does not sell calendar data, use it for advertising, or use it to train AI models. No application analytics or advertising tracking is implemented.</p>
+    <p>Calendar Busy Sync’s use and transfer to any other app of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
+
+    <h2>Local storage and security</h2>
+    <p>The application saves configuration, calendar selections, OAuth client information, access/refresh credentials, and synchronization state on your computer. The SQLite state database records source/destination event identifiers, ownership markers, and successful-sync checkpoints. Microsoft’s token cache can also contain account-identifying information. Normal command output reports operation counts and status rather than event content.</p>
+    <p>By default, configuration is under <code>~/.config/calendar-busy-sync</code> and credentials/state are under <code>~/.local/state/calendar-busy-sync</code>; configured XDG directories can change these locations. The application restricts directory and file permissions to your user. This is not application-level encryption at rest: protect your computer, backups, and user account. Connections to provider APIs use HTTPS.</p>
+    <p>Credentials remain local until you remove them or the provider expires or revokes them. Sync references and checkpoints remain until reconciliation updates them or you remove the local files; there is no automatic full-data retention deadline. Calendar copies remain with Google or Microsoft until synchronization removes eligible owned copies or you delete them. Historical copies outside the current sync window can remain.</p>
+
+    <h2>Stopping access and deleting data</h2>
+    <ol>
+      <li>Stop future scheduled runs with <code>calendar-busy-sync schedule disable</code> and stop running manual sync commands.</li>
+      <li>Revoke the application’s access in <a href="https://myaccount.google.com/connections">your Google account connections</a> and through your Microsoft account or organization’s application-access controls.</li>
+      <li>Review and remove unwanted generated Busy appointments in the provider calendars. Revoking access or uninstalling the tool does not automatically delete calendar copies.</li>
+      <li>After you no longer need reconciliation or recovery, remove the application’s local configuration and state directories, including credentials and any backups you control. Deleting ownership state first can leave copies that require manual identification and cleanup.</li>
+    </ol>
+    <p>Package removal preserves local configuration, credentials, and state. The Debian package removes its managed system-package schedule; other installation methods require you to disable scheduling yourself. Google and Microsoft control retention in their own systems under their policies.</p>
+
+    <h2>This website and support</h2>
+    <p>This static website has no sign-in, calendar connection, forms, analytics scripts, or project-added cookies. It is hosted on GitHub Pages. GitHub logs visitor IP addresses for security purposes, as described in <a href="https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages#data-collection">its Pages documentation</a> and <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">privacy statement</a>. Linked services have their own privacy policies.</p>
+    <p>If you contact the maintainer, your email address and the content you send are used to respond and address the request. Do not send OAuth tokens, credential files, or real event details. GitHub issues are public; use email for private concerns. You may request deletion of support correspondence held by the maintainer, subject to applicable legal requirements; external providers control their own records.</p>
+
+    <h2>Contact and changes</h2>
+    <p>For privacy questions or requests, contact Marlen Brunner at <a href="mailto:klondikemarlen@gmail.com">klondikemarlen@gmail.com</a>. The maintainer cannot delete calendar or local application data they do not hold; use the controls above.</p>
+    <p>Changes to this policy will be published on this page with an updated effective date. The <a href="https://github.com/klondikemarlen/calendar-busy-sync">source repository</a> records the history of the policy and application.</p>
+  </main>
+  <footer class="site-footer">
+    <a href="../">Calendar Busy Sync home</a>
+    <span>Privacy policy</span>
+    <a href="https://github.com/klondikemarlen/calendar-busy-sync">GitHub repository</a>
+  </footer>
+</body>
+</html>

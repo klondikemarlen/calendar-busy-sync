@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Calendar Busy Sync is a free, open-source local tool that mirrors availability between Google Calendar and Outlook as private Busy appointments.">
+  <title>Calendar Busy Sync — Private busy-time mirroring</title>
+  <link rel="icon" type="image/png" href="logo.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <a class="brand" href="./"><img src="logo.png" width="44" height="44" alt="">Calendar Busy Sync</a>
+    <nav aria-label="Main navigation">
+      <a href="#install">Install</a>
+      <a href="privacy/">Privacy</a>
+      <a href="https://github.com/klondikemarlen/calendar-busy-sync">Source code</a>
+    </nav>
+  </header>
+  <main id="main">
+    <section class="hero" aria-labelledby="intro">
+      <div>
+        <p class="eyebrow">Free · Open source · Runs on your computer</p>
+        <h1 id="intro">Busy time.<br>Not personal details.</h1>
+        <p class="lede">Mirror availability between Google Calendar and Outlook as private <strong>Busy</strong> appointments. Keep your personal plans out of your work event descriptions.</p>
+        <div class="actions">
+          <a class="button" href="#install">Get started</a>
+          <a href="privacy/">Read the privacy policy</a>
+        </div>
+      </div>
+      <img class="hero-logo" src="logo.png" width="240" height="240" alt="Calendar with busy blocks and synchronization arrows">
+    </section>
+    <section aria-labelledby="how-it-works">
+      <h2 id="how-it-works">Your calendars. A local connection.</h2>
+      <div class="cards">
+        <article>
+          <h3>Only Busy copies</h3>
+          <p>Copies contain the time interval, Busy status, private ownership metadata, and a fixed origin note. No source titles, descriptions, locations, guests, or meeting links are copied.</p>
+        </article>
+        <article>
+          <h3>You choose the direction</h3>
+          <p>Google → Outlook is the default and uses read-only Google access. Optional reciprocal mode also writes Busy copies to Google. Original events are not edited.</p>
+        </article>
+        <article>
+          <h3>No hosted sync service</h3>
+          <p>The Python command-line tool connects directly to Google and Microsoft from your computer. Credentials and sync references stay in private local files, not on a Calendar Busy Sync server.</p>
+        </article>
+      </div>
+    </section>
+    <section id="install" aria-labelledby="install-title">
+      <h2 id="install-title">Install, then connect your accounts</h2>
+      <p>Ubuntu 26.04 packages are available from the project’s public PPA. There is no subscription charge for Calendar Busy Sync.</p>
+      <ol class="steps">
+        <li><strong>Install the CLI.</strong> Follow the <a href="https://github.com/klondikemarlen/calendar-busy-sync/blob/main/docs/packaging.md#install-from-the-ppa">PPA installation instructions</a>, or use the <a href="https://github.com/klondikemarlen/calendar-busy-sync/releases">published release artifacts</a>.</li>
+        <li><strong>Configure and authorize.</strong> Run <code>calendar-busy-sync setup</code>. You currently supply your own Google Desktop OAuth client and Microsoft application registration; guided registration assistance is available. Review the <a href="privacy/">privacy policy</a> before granting access.</li>
+        <li><strong>Sync, then optionally schedule.</strong> Follow the <a href="https://github.com/klondikemarlen/calendar-busy-sync/blob/main/docs/usage.md">setup and operation guide</a>. Installation alone never authorizes accounts, syncs calendars, or enables a scheduled job.</li>
+      </ol>
+      <aside class="notice" aria-label="Operating limits">
+        <p><strong>Keep the computer awake and online for scheduled sync.</strong> Google consent and Microsoft tenant policies still apply. Busy status does not prevent a conflicting invitation. Coworker Scheduling Assistant visibility remains independently unverified; see <a href="https://github.com/klondikemarlen/calendar-busy-sync/issues/1">the remaining live check</a>.</p>
+      </aside>
+    </section>
+    <section aria-labelledby="support">
+      <h2 id="support">Open source, with a clear point of contact</h2>
+      <p>Calendar Busy Sync is maintained by Marlen Brunner and released under the <a href="https://github.com/klondikemarlen/calendar-busy-sync/blob/main/LICENSE">MIT license</a>. It is an independent project, not a Google or Microsoft product.</p>
+      <p>Questions or privacy requests: <a href="mailto:klondikemarlen@gmail.com">klondikemarlen@gmail.com</a>. Report bugs on <a href="https://github.com/klondikemarlen/calendar-busy-sync/issues">GitHub</a>; never include tokens, credentials, or real calendar details in public reports.</p>
+    </section>
+  </main>
+  <footer class="site-footer">
+    <span>Calendar Busy Sync</span>
+    <a href="privacy/">Privacy policy</a>
+    <a href="https://github.com/klondikemarlen/calendar-busy-sync">GitHub repository</a>
+  </footer>
+</body>
+</html>
