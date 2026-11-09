@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">Calendar Busy Sync</title>
+  <desc id="description">A navy and teal calendar with anonymous busy blocks and two circular synchronization arrows on a transparent background.</desc>
+  <g id="calendar">
+    <rect x="66" y="82" width="380" height="364" rx="48" fill="#17324D"/>
+    <rect x="86" y="102" width="340" height="324" rx="30" fill="#FFFFFF"/>
+    <path d="M 114 102 H 398 A 28 28 0 0 1 426 130 V 188 H 86 V 130 A 28 28 0 0 1 114 102 Z" fill="#087F8C"/>
+    <g id="binding" fill="#17324D">
+      <rect x="152" y="54" width="24" height="74" rx="12"/>
+      <rect x="336" y="54" width="24" height="74" rx="12"/>
+    </g>
+  </g>
+  <g id="busy-blocks">
+    <rect x="122" y="224" width="72" height="24" rx="8" fill="#087F8C"/>
+    <rect x="122" y="274" width="104" height="24" rx="8" fill="#17324D"/>
+    <rect x="122" y="324" width="66" height="24" rx="8" fill="#087F8C"/>
+  </g>
+  <g id="sync-arrows">
+    <g id="forward-arrow">
+      <path d="M 251.465 280.839 A 69 69 0 0 1 381.952 298.018" fill="none" stroke="#087F8C" stroke-width="18"/>
+      <path d="M 384.730 313.775 L 401.477 276.298 L 356.175 284.286 Z" fill="#087F8C"/>
+    </g>
+    <g id="return-arrow">
+      <path d="M 376.535 339.161 A 69 69 0 0 1 246.048 321.982" fill="none" stroke="#17324D" stroke-width="18"/>
+      <path d="M 243.270 306.225 L 226.523 343.702 L 271.825 335.714 Z" fill="#17324D"/>
+    </g>
+  </g>
+</svg>

@@ -6,6 +6,7 @@
 
 - Publish a free GitHub Pages homepage and privacy policy describing local calendar processing, provider transfers, storage, and deletion controls.
 - Document checksum-verified wheel installation, private backup/restore, and offline dependency preservation so reinstalling does not depend solely on the Ubuntu PPA or discard existing Busy-copy ownership.
+- Preserve the original logo PNGs and an editable SVG in `design/` for reuse at other sizes.
 
 ### Changed
 

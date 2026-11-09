@@ -23,3 +23,5 @@ Revisions without a Python project report those checks as not applicable; tracke
 ## Website Publication
 
 The public homepage and privacy policy are plain HTML/CSS in `site/`. Preview them with `python3 -m http.server 8765 --directory site`. The [Pages workflow](.github/workflows/pages.yml) deploys only that directory when it or the workflow changes on `main`; it can also be dispatched on `main`. GitHub Pages uses the free default project hostname, with no custom domain, JavaScript, analytics, or application backend. Website publication is independent of Python/PPA releases and does not establish Google OAuth verification.
+
+Reusable logo artwork lives in [`design/`](design/): an [editable SVG](design/calendar-busy-sync-logo.svg) reconstructed from the original drawing geometry, plus the unchanged original [512px](design/calendar-busy-sync-logo-512.png) and [120px](design/calendar-busy-sync-logo.png) transparent PNGs. Use the SVG for new sizes; different renderers may produce slightly different edge pixels. [`site/logo.png`](site/logo.png) is the website's deployment copy of the 512px PNG; keep it aligned when intentionally updating the branding.
