@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
 
-from . import __version__, auth, engine, models, registration, settings, state
+from . import __version__, auth, engine, health, models, registration, settings, state
 from .schedule import ScheduleError, disable_schedule, enable_schedule, schedule_status
 
 
@@ -202,16 +202,7 @@ def _authorize(provider: str, paths: settings.Paths) -> None:
 
 
 def _run_sync(paths: settings.Paths, dry_run: bool = False) -> dict:
-    configured = settings.load_settings(paths)
-    try:
-        return engine.run_sync(configured, paths, dry_run=dry_run)
-    except models.SyncError as exc:
-        message = str(exc)
-        if "revok" in message.lower() or "expired" in message.lower():
-            raise models.SyncError(
-                f"Authorization was rejected or revoked. Run 'calendar-busy-sync auth'. {message}"
-            ) from None
-        raise
+    return engine.run_sync(None, paths, dry_run=dry_run)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -251,13 +242,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "doctor":
             _doctor(paths)
         elif args.command == "status":
-            configured = settings.load_settings(paths)
+            configuration_error = None
+            try:
+                configured = settings.load_settings(paths)
+            except models.SyncError as exc:
+                configured = None
+                configuration_error = str(exc)
             print(
                 json.dumps(
                     {
-                        "configured": True,
-                        "direction": configured.direction,
+                        "configured": configured is not None,
+                        "configuration_error": configuration_error,
+                        "direction": configured.direction if configured else None,
                         "last_success": state.last_success(paths),
+                        "sync_health": health.snapshot(paths),
                         "schedule": schedule_status(paths=paths).enabled,
                     },
                     sort_keys=True,

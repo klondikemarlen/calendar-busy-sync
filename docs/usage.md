@@ -125,6 +125,28 @@ Package upgrades preserve the managed job and its interval. Each execution start
 
 The computer must be awake, online, and running cron. Missed cron executions are not automatically replayed; run `calendar-busy-sync sync` when you need immediate reconciliation. Busy status informs scheduling but does not prevent someone from sending a conflicting invitation.
 
+## Failure Notifications and Recovery
+
+Real syncs, including existing cron jobs after an upgrade, record `sync_health` in `calendar-busy-sync status`: `outcome` (`unknown`, `failed`, or `ok`), `last_attempt`, `failure_since`, recovery instructions and notification delivery status. `last_success` remains the last completed real sync; an old success does not clear a newer failure. Legacy databases report unknown health until the next real sync. Dry runs, connectivity checks and lock contention do not change real-sync health. A configuration error is also shown by `status`; preserve existing files and follow its setup/repair instruction.
+
+A failed sync sends a generic desktop notification with terminal recovery commands, without event details, calendar identifiers or provider responses. While failures continue, successfully submitted reminders are limited to one per 24 hours across processes; the next successful sync attempts one recovery notice. Reauthorization alone does not mark the sync healthy. Open a terminal using the same XDG roots and installed executable as your schedule:
+
+```sh
+calendar-busy-sync status
+calendar-busy-sync doctor
+# Run only the affected account's command if authorization is rejected:
+calendar-busy-sync auth google
+calendar-busy-sync auth outlook
+calendar-busy-sync sync
+calendar-busy-sync status
+```
+
+Google Testing-mode token expiry may require publishing your personal OAuth project rather than repeatedly signing in; review the Google guidance above. Outlook tenant/consent restrictions may require administrator assistance. Do not delete configuration, tokens or ownership state to repair an expired grant. For network/service failures, restore connectivity and retry sync; authorization is not needed for every failure.
+
+Desktop delivery requires `/usr/bin/notify-send` (`libnotify-bin`, recommended by the Debian package) and a logged-in Linux desktop providing notifications on your own `/run/user/UID/bus`. Cron discovers this same-user bus without requiring inherited desktop environment variables. Missing tools, logout, unavailable desktop service or notification timeouts never change the sync's failure exit code; status remains available, and failed delivery is retried on the next failed sync. A successful submission does not prove that desktop Do Not Disturb settings allowed a visible popup. A recovery notice unavailable at the recovery sync is not queued for later. Local state access failures can prevent health recording; preserve files and check permissions using the terminal diagnostic.
+
+No email account or MTA is required or configured. Existing cron commands and their stdout/stderr diagnostics are preserved; any separately configured cron mail behavior remains unchanged. Notifications do not detect missed runs while the computer is asleep or cron is stopped, and `ok` is a historical result, not a live heartbeat.
+
 ## Backup and Reinstall
 
 For an existing installation, restore its identity and ownership records rather than starting setup from scratch. These Linux steps use `flock` from util-linux and ordinary file copies; they do not require cloud administration tools. Keep only one computer syncing this installation: its lock coordinates local processes, not two machines.

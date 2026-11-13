@@ -7,10 +7,15 @@
 - Publish a free GitHub Pages homepage and privacy policy describing local calendar processing, provider transfers, storage, and deletion controls.
 - Document checksum-verified wheel installation, private backup/restore, and offline dependency preservation so reinstalling does not depend solely on the Ubuntu PPA or discard existing Busy-copy ownership.
 - Preserve the original logo PNGs and an editable SVG in `design/` for reuse at other sizes.
+- Report failed syncs through private desktop notifications with daily reminders and a recovery notice, and persist sync health plus Google/Outlook recovery commands in `status`. Existing managed schedules gain this behavior after upgrade without cron email setup.
 
 ### Changed
 
 - Route website support and privacy requests through the dedicated support group instead of publishing the maintainer's personal email address.
+
+### Fixed
+
+- Suppress the redundant GTK `atk-bridge` module request only while opening Google's authorization browser; retain other GTK modules and diagnostics.
 
 ## [1.0.0](https://github.com/klondikemarlen/calendar-busy-sync/releases/tag/v1.0.0) - 2026-11-06
 
