@@ -18,6 +18,9 @@ _RECOVERY = (
     "calendar-busy-sync auth google or calendar-busy-sync auth outlook for the affected account, "
     "then calendar-busy-sync sync. Inspect calendar-busy-sync status."
 )
+_FAILURE_NOTICE = (
+    "Check the connection:\ncalendar-busy-sync doctor\n\nRecovery instructions:\ncalendar-busy-sync status"
+)
 
 
 def snapshot(paths) -> dict:
@@ -63,7 +66,7 @@ def record(paths, *, failed: bool, now: datetime | None = None) -> None:
         if failed:
             last = health["last_notification"]
             if last is None or now - datetime.fromisoformat(last) >= REMINDER_INTERVAL:
-                delivered = notify("Calendar Busy Sync needs attention", _RECOVERY)
+                delivered = notify("Calendar Busy Sync needs attention", _FAILURE_NOTICE)
                 health["notification"] = "sent" if delivered else "unavailable"
                 if delivered:
                     health["last_notification"] = now.isoformat()

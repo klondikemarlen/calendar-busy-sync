@@ -29,6 +29,11 @@ class HealthTests(unittest.TestCase):
         with patch("calendar_busy_sync.health.notify", return_value=True) as notify:
             health.record(self.paths, failed=True, now=self.now)
             first = health.snapshot(self.paths)
+            notify.assert_called_once_with(
+                "Calendar Busy Sync needs attention",
+                "Check the connection:\ncalendar-busy-sync doctor\n\n"
+                "Recovery instructions:\ncalendar-busy-sync status",
+            )
             self.assertEqual(first["outcome"], "failed")
             self.assertEqual(first["failure_since"], self.now.isoformat())
             self.assertIn("calendar-busy-sync auth google", first["recovery"])
