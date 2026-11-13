@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+from contextlib import contextmanager
 
 from .models import SyncError
 from .providers import GoogleCalendarClient, OutlookCalendarClient
@@ -30,6 +32,21 @@ def _save_google_grant(paths, credentials, expected):
     private_write(paths.google_token_file, json.dumps(token_data))
 
 
+@contextmanager
+def _without_redundant_gtk_bridge():
+    modules = os.environ.get("GTK_MODULES")
+    if modules is None or "atk-bridge" not in modules.split(":"):
+        yield
+        return
+
+    # GTK provides atk-bridge natively. Keep every other requested module.
+    os.environ["GTK_MODULES"] = ":".join(module for module in modules.split(":") if module != "atk-bridge")
+    try:
+        yield
+    finally:
+        os.environ["GTK_MODULES"] = modules
+
+
 def authorize_google(settings, paths) -> None:
     try:
         from google_auth_oauthlib.flow import InstalledAppFlow
@@ -41,15 +58,17 @@ def authorize_google(settings, paths) -> None:
         flow = InstalledAppFlow.from_client_secrets_file(
             str(paths.google_client_file), _google_scopes(settings), autogenerate_code_verifier=True
         )
-        creds = flow.run_local_server(
-            host="127.0.0.1",
-            bind_addr="127.0.0.1",
-            port=0,
-            open_browser=True,
-            access_type="offline",
-            prompt="consent",
-            timeout_seconds=300,
-        )
+        # The SDK launches the browser through webbrowser, which inherits our environment.
+        with _without_redundant_gtk_bridge():
+            creds = flow.run_local_server(
+                host="127.0.0.1",
+                bind_addr="127.0.0.1",
+                port=0,
+                open_browser=True,
+                access_type="offline",
+                prompt="consent",
+                timeout_seconds=300,
+            )
         _save_google_grant(paths, creds, _google_scopes(settings))
     except SyncError:
         raise
