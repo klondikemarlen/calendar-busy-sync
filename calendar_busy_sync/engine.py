@@ -3,11 +3,13 @@
 import fcntl
 import hashlib
 import os
+import sqlite3
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
+from . import health
 from .models import CalendarClient, CopyIdUnavailable, Event, SyncError
 from .settings import Paths, Settings, load_settings
 from .state import Mapping, State
@@ -219,13 +221,22 @@ def synchronize(
     return counts
 
 
-def run_sync(settings: Settings, paths: Paths, dry_run=False):
+def run_sync(settings: Settings | None, paths: Paths, dry_run=False):
     from .auth import build_clients
 
     with sync_lock(paths):
-        if load_settings(paths) != settings:
-            raise SyncError("Configuration changed before sync; run the command again.")
-        return synchronize(settings, paths, build_clients(settings, paths), dry_run=dry_run)
+        try:
+            current = load_settings(paths)
+            if settings is not None and current != settings:
+                raise SyncError("Configuration changed before sync; run the command again.")
+            result = synchronize(current, paths, build_clients(current, paths), dry_run=dry_run)
+        except (SyncError, OSError, sqlite3.Error):
+            if not dry_run:
+                health.record(paths, failed=True)
+            raise
+        if not dry_run:
+            health.record(paths, failed=False)
+        return result
 
 
 def doctor(settings: Settings, paths: Paths):
