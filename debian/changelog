@@ -1,3 +1,12 @@
+calendar-busy-sync (1.1.0+resolute1) resolute; urgency=medium
+
+  * Add private desktop sync-failure reminders and recovery notifications.
+  * Persist sync health and account-specific recovery guidance in status.
+  * Avoid the redundant GTK bridge warning during Google authorization.
+  * Preserve existing configuration, ownership state, and managed schedules.
+
+ -- Marlen Brunner <klondikemarlen@gmail.com>  Fri, 13 Nov 2026 17:51:44 +0000
+
 calendar-busy-sync (1.0.0+resolute1) resolute; urgency=medium
 
   * Release version 1.0 of the existing busy-only synchronization workflow.

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [1.1.0](https://github.com/klondikemarlen/calendar-busy-sync/releases/tag/v1.1.0) - 2026-11-13
+
 ### Added
 
 - Publish a free GitHub Pages homepage and privacy policy describing local calendar processing, provider transfers, storage, and deletion controls.
@@ -16,6 +18,11 @@
 ### Fixed
 
 - Suppress the redundant GTK `atk-bridge` module request only while opening Google's authorization browser; retain other GTK modules and diagnostics.
+
+### Known Limitations
+
+- Coworker Scheduling Assistant visibility remains unverified and accepted by the maintainer; issue #1 remains open. No new live-calendar checks were performed for this release.
+- Desktop alerts require an available graphical notification service; persistent sync health and recovery commands remain available through `status`.
 
 ## [1.0.0](https://github.com/klondikemarlen/calendar-busy-sync/releases/tag/v1.0.0) - 2026-11-06
 
