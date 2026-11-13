@@ -2,10 +2,6 @@
 
 ## Unreleased
 
-### Fixed
-
-- Make desktop failure notices easier to scan with labeled sections and commands on separate lines; keep full authorization recovery instructions in `status`.
-
 ## [1.1.0](https://github.com/klondikemarlen/calendar-busy-sync/releases/tag/v1.1.0) - 2026-11-13
 
 ### Added
@@ -22,6 +18,7 @@
 ### Fixed
 
 - Suppress the redundant GTK `atk-bridge` module request only while opening Google's authorization browser; retain other GTK modules and diagnostics.
+- Make desktop failure notices easier to scan with labeled sections and commands on separate lines; keep full authorization recovery instructions in `status`.
 
 ### Known Limitations
 
