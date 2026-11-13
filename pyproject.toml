@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "calendar-busy-sync"
-version = "1.0.0"
+version = "1.1.0"
 description = "Local anonymous busy-time mirroring between Google Calendar and Outlook"
 license = "MIT"
 license-files = ["LICENSE"]

@@ -110,11 +110,11 @@ Create or edit the PPA through Launchpad's website. Reading public archive/build
 
 After release acceptance and merging the reviewed source, run `make source`. Inspect the generated `.dsc` and `_source.changes` in `dist/`: their version must match the intended upload and their distribution must be `resolute`. The staging directory name follows the Debian changelog version. `make source` deliberately leaves artifacts unsigned.
 
-Sign that exact source version explicitly with a locally held key whose public key is registered to the Launchpad uploader account. For version 1.0, from the repository root:
+Sign that exact source version explicitly with a locally held key whose public key is registered to the Launchpad uploader account. For version 1.1, from the repository root:
 
 ```sh
-debsign -kYOUR_REGISTERED_SIGNING_KEY dist/calendar-busy-sync_1.0.0+resolute1_source.changes
-dscverify --keyring "$HOME/.gnupg/pubring.kbx" dist/calendar-busy-sync_1.0.0+resolute1_source.changes
+debsign -kYOUR_REGISTERED_SIGNING_KEY dist/calendar-busy-sync_1.1.0+resolute1_source.changes
+dscverify --keyring "$HOME/.gnupg/pubring.kbx" dist/calendar-busy-sync_1.1.0+resolute1_source.changes
 ```
 
 Replace `YOUR_REGISTERED_SIGNING_KEY` with the intended signing-key fingerprint, and select the uploader's actual public keyring if it differs from the GnuPG keybox path shown. Signing may open a GPG passphrase prompt; it is not `sudo`, does not upload anything, and does not grant API access. Do not enter a passphrase in chat. Verification must succeed against the signer's trusted local public keyring before upload.
@@ -122,8 +122,8 @@ Replace `YOUR_REGISTERED_SIGNING_KEY` with the intended signing-key fingerprint,
 Upload only after checking the signed version and target archive:
 
 ```sh
-dput ppa:klondikemarlen/calendar-busy-sync dist/calendar-busy-sync_1.0.0+resolute1_source.changes
+dput ppa:klondikemarlen/calendar-busy-sync dist/calendar-busy-sync_1.1.0+resolute1_source.changes
 ```
 
-Launchpad accepts source uploads, not the locally built binary `.deb`. Successful transfer alone does not prove acceptance or a successful build. Observe the exact source version and build result on Launchpad, then verify installation of that version from the PPA in an isolated Ubuntu 26.04 environment before claiming it is available there. Publish the `v1.0.0` GitHub release against the reviewed merge commit with the corresponding wheel, source and Debian artifacts; verify downloaded release assets separately. Existing user configuration, credentials and scheduling remain separate from package publication.
+Launchpad accepts source uploads, not the locally built binary `.deb`. Successful transfer alone does not prove acceptance or a successful build. Observe the exact source version and build result on Launchpad, then verify installation of that version from the PPA in an isolated Ubuntu 26.04 environment before claiming it is available there. Publish the `v1.1.0` GitHub release against the reviewed merge commit with the corresponding wheel, source and Debian artifacts; verify downloaded release assets separately. Existing user configuration, credentials and scheduling remain separate from package publication.
 
