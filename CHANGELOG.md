@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## [1.1.1](https://github.com/klondikemarlen/calendar-busy-sync/releases/tag/v1.1.1) - 2026-11-16
+
+### Changed
+
+- Recommend bidirectional Busy-only copying in setup, including reconfiguration, and default to authorization, connectivity checks, and an explicitly labeled initial sync. Keep recurring scheduling opt-in and provide recovery commands when steps are skipped.
+
 ## [1.1.0](https://github.com/klondikemarlen/calendar-busy-sync/releases/tag/v1.1.0) - 2026-11-13
 
 ### Added
