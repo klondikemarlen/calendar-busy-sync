@@ -266,8 +266,6 @@ def _config(args: argparse.Namespace, paths: settings.Paths) -> None:
         for key, description in _CONFIG_KEYS.items():
             value = _display_config_value(getattr(current, key.replace("-", "_")))
             print(f"{key} = {value}\n  {description}")
-        count = len(current.event_padding_overrides)
-        print(f"Per-event padding overrides: {count}. Overrides replace directional event padding.")
         print("Credentials, account identifiers, and event identifiers are not displayed or editable here.")
         return
     field = args.key.replace("-", "_")
@@ -294,8 +292,6 @@ def _config(args: argparse.Namespace, paths: settings.Paths) -> None:
     print("Configuration saved. No calendar events changed; automatic syncing is off.")
     if args.key == "direction":
         print("Before syncing, reauthorize Google: calendar-busy-sync auth google")
-    if args.key.startswith(("google-", "outlook-")) and updated.event_padding_overrides:
-        print("Existing per-event overrides still replace directional padding for those events.")
     print("Preview: calendar-busy-sync sync --dry-run")
     print("Apply: calendar-busy-sync sync")
     print("After a successful sync, opt in again: calendar-busy-sync schedule enable")
