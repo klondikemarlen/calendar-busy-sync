@@ -1,3 +1,11 @@
+calendar-busy-sync (1.2.0+resolute1) resolute; urgency=medium
+
+  * Add config list/get/set for validated operational setting changes.
+  * Explain event padding separately from work-window filtering.
+  * Preserve account identity and overrides; keep synchronization explicit.
+
+ -- Marlen Brunner <klondikemarlen@gmail.com>  Mon, 16 Nov 2026 17:00:00 +0000
+
 calendar-busy-sync (1.1.1+resolute1) resolute; urgency=medium
 
   * Recommend bidirectional Busy-only copying during interactive setup.

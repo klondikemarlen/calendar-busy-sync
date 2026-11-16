@@ -13,7 +13,6 @@ from pathlib import Path
 from . import __version__, auth, engine, health, models, registration, settings, state
 from .schedule import ScheduleError, disable_schedule, enable_schedule, schedule_status
 
-
 _CONFIG_KEYS = {
     "direction": "both or google-to-outlook; changing this requires Google reauthorization",
     "days-back": "sync look-back days (0-365)",
@@ -299,7 +298,8 @@ def _config(args: argparse.Namespace, paths: settings.Paths) -> None:
         print("Existing per-event overrides still replace directional padding for those events.")
     print("Preview: calendar-busy-sync sync --dry-run")
     print("Apply: calendar-busy-sync sync")
-    print("After a successful sync, opt in again: calendar-busy-sync schedule enable --minutes 15")
+    print("After a successful sync, opt in again: calendar-busy-sync schedule enable")
+    print("Use schedule enable --minutes to restore your preferred interval.")
 
 
 def _parser() -> argparse.ArgumentParser:
