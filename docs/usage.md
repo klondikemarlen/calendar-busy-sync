@@ -54,7 +54,13 @@ The guided Microsoft helper signs into your tenant using isolated Azure CLI conf
 
 ## Guided Setup
 
-Run `calendar-busy-sync setup` in a terminal. Supply an existing Google desktop-client JSON and approved Microsoft client ID/tenant, or leave the corresponding entry blank for the optional just-in-time registration guide described above. The wizard preserves the installation identity on reconfiguration. It separately offers application authorization, a read-only connectivity check, an initial sync, and finally scheduling; none is implied by installing the package or an administration helper. A corrupt existing configuration must be repaired without inventing a new installation identity.
+Run `calendar-busy-sync setup` in a terminal. Supply an existing Google desktop-client JSON and approved Microsoft client ID/tenant, or leave the corresponding entry blank for the optional just-in-time registration guide described above. Existing account details are offered for reuse. The wizard preserves the installation identity on reconfiguration; a corrupt existing configuration must be repaired without inventing a new identity.
+
+Press Enter to accept the recommended **both** direction: Google appointments become private Busy blocks in Outlook, and Outlook appointments become private Busy blocks in Google. Setup recommends this even when reconfiguring a one-way installation; explicitly enter `google-to-outlook` to keep one-way copying. Loading saved configuration or installing an upgrade never changes the saved direction.
+
+Authorization, the read-only connectivity check, and the initial synchronization default to **yes**. Browser consent still needs your approval, including Google calendar write permission for bidirectional copying. Reauthorize when changing direction so the grant matches the selected mode. Optional work-hour and padding customization defaults to **no**, preserving existing choices. Skipped steps print recovery commands; saving configuration alone does not mean syncing is ready.
+
+The initial synchronization prompt explicitly warns that it writes owned Busy copies. Recurring scheduling remains a separate **no-by-default** choice, offered only after a successful sync. Setup asks before disabling an existing schedule for reconfiguration; accepting that prompt stops automatic syncing until you opt back in. Installation alone never authorizes accounts, changes calendar events, or enables scheduling.
 
 Alternatively, after configuration:
 

@@ -1,3 +1,11 @@
+calendar-busy-sync (1.1.1+resolute1) resolute; urgency=medium
+
+  * Recommend bidirectional Busy-only copying during interactive setup.
+  * Default to authorization, connection checks, and an initial sync.
+  * Keep scheduling opt-in and explain skipped setup steps.
+
+ -- Marlen Brunner <klondikemarlen@gmail.com>  Mon, 16 Nov 2026 12:00:00 +0000
+
 calendar-busy-sync (1.1.0+resolute1) resolute; urgency=medium
 
   * Add private desktop sync-failure reminders and recovery notifications.
