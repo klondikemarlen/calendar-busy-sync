@@ -206,16 +206,15 @@ class EngineTests(unittest.TestCase):
         originals = (dict(self.google.events), dict(self.outlook.events))
         self.settings.work_hours_enabled = True
         self.settings.work_timezone = "Etc/GMT+7"
-        self.settings.event_padding_overrides = [
-            {"source": "google", "event_id": "personal", "lead_minutes": 60, "trail_minutes": 30}
-        ]
+        self.settings.google_lead_minutes = 60
+        self.settings.google_trail_minutes = 30
         self.sync()
         copy = next(value for value in self.outlook.events.values() if value.marker)
         source = self.google.events["personal"]
         self.assertEqual(
             (copy.start, copy.end), (source.start - timedelta(hours=1), source.end + timedelta(minutes=30))
         )
-        self.settings.event_padding_overrides[0]["lead_minutes"] = 90
+        self.settings.google_lead_minutes = 90
         self.assertEqual(self.sync()["updated"], 1)
         self.settings.work_start, self.settings.work_end = "15:00", "17:00"
         self.settings.work_lead_minutes = self.settings.work_trail_minutes = 0

@@ -23,9 +23,6 @@ class ConfigTests(unittest.TestCase):
             direction="both",
             microsoft_client_id="00000000-0000-0000-0000-000000000001",
             google_calendar="private-calendar",
-            event_padding_overrides=[
-                {"source": "google", "event_id": "private-event", "lead_minutes": 5, "trail_minutes": 10}
-            ],
         )
         settings.save_settings(self.paths, self.current)
         with state.State(self.paths) as store:
@@ -42,7 +39,7 @@ class ConfigTests(unittest.TestCase):
             code = cli.main(["config", *arguments])
         return code, output.getvalue(), error.getvalue()
 
-    def test_setting_padding_preserves_accounts_identity_and_per_event_overrides(self):
+    def test_setting_padding_preserves_accounts_and_identity(self):
         self.run_config("set", "google-lead-minutes", "60")
         self.assertEqual(settings.load_settings(self.paths), replace(self.current, google_lead_minutes=60))
 
@@ -50,7 +47,7 @@ class ConfigTests(unittest.TestCase):
         self.run_config("set", "google-lead-minutes", "60")
         self.assertFalse(state.has_success(self.paths, settings.load_settings(self.paths)))
 
-    def test_padding_commands_expand_google_copies_not_outlook_originals_or_overrides(self):
+    def test_padding_commands_expand_google_copies_not_outlook_originals(self):
         self.run_config("set", "google-lead-minutes", "60")
         self.run_config("set", "google-trail-minutes", "60")
         policy = TimingPolicy(settings.load_settings(self.paths))
@@ -60,13 +57,6 @@ class ConfigTests(unittest.TestCase):
         window_start, window_end = start - timedelta(days=1), start + timedelta(days=1)
         self.assertEqual(policy.desired_copy("google", event, window_start, window_end), expected)
         self.assertEqual(policy.desired_copy("outlook", event, window_start, window_end), event)
-        overridden = replace(event, id="private-event")
-        expected_override = replace(
-            overridden, start=start - timedelta(minutes=5), end=event.end + timedelta(minutes=10)
-        )
-        self.assertEqual(
-            policy.desired_copy("google", overridden, window_start, window_end), expected_override
-        )
 
     def test_invalid_values_leave_configuration_and_success_checkpoint_untouched(self):
         original = self.paths.config_file.read_bytes()
@@ -124,12 +114,10 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("NOT event padding", output)
         self.assertIn("Google appointments in Outlook Busy copies", output)
-        self.assertIn("Per-event padding overrides: 1", output)
         for private in (
             self.current.installation_id,
             self.current.microsoft_client_id,
             "private-calendar",
-            "private-event",
         ):
             self.assertNotIn(private, output)
         self.assertTrue(state.has_success(self.paths, self.current))
@@ -147,6 +135,36 @@ class ConfigTests(unittest.TestCase):
         with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             cli.main(["config", "set", "installation-id", "new-identity"])
         self.assertEqual(json.loads(self.paths.config_file.read_text()), original)
+
+    def test_empty_legacy_overrides_load_and_disappear_on_save(self):
+        legacy = json.loads(self.paths.config_file.read_text())
+        legacy["event_padding_overrides"] = []
+        self.paths.config_file.write_text(json.dumps(legacy))
+        self.assertEqual(settings.load_settings(self.paths), self.current)
+        code, _, error = self.run_config("set", "google-lead-minutes", "60")
+        self.assertEqual((code, error), (0, ""))
+        self.assertNotIn("event_padding_overrides", json.loads(self.paths.config_file.read_text()))
+        self.assertEqual(settings.load_settings(self.paths), replace(self.current, google_lead_minutes=60))
+
+    def test_nonempty_or_invalid_legacy_overrides_stop_sync_without_mutation(self):
+        legacy = json.loads(self.paths.config_file.read_text())
+        for overrides in (
+            [{"source": "google", "event_id": "private-event", "lead_minutes": 60, "trail_minutes": 60}],
+            None,
+            {},
+        ):
+            with self.subTest(overrides=overrides):
+                legacy["event_padding_overrides"] = overrides
+                original = json.dumps(legacy)
+                self.paths.config_file.write_text(original)
+                error = io.StringIO()
+                with patch("calendar_busy_sync.auth.build_clients") as clients, redirect_stderr(error):
+                    code = cli.main(["sync"])
+                self.assertEqual(code, 2)
+                self.assertIn("calendar-busy-sync schedule disable", error.getvalue())
+                self.assertNotIn("private-event", error.getvalue())
+                clients.assert_not_called()
+                self.assertEqual(self.paths.config_file.read_text(), original)
 
 
 if __name__ == "__main__":

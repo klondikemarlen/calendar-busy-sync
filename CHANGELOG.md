@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## [2.0.0](https://github.com/klondikemarlen/calendar-busy-sync/releases/tag/v2.0.0) - 2026-11-16
+
+### Removed
+
+- Per-event padding overrides. Each direction now has one before/after padding pair for every appointment. Nonempty legacy overrides stop configuration loading with migration instructions instead of silently changing Busy copies; empty legacy lists are accepted and omitted on the next save.
+
+### Known Limitations
+
+- Coworker Scheduling Assistant visibility remains unverified under the previously accepted limitation in issue #1. This release uses synthetic calendar checks, not new live-account checks.
+
 ## [1.2.0](https://github.com/klondikemarlen/calendar-busy-sync/releases/tag/v1.2.0) - 2026-11-16
 
 ### Added
