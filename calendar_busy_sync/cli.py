@@ -94,7 +94,7 @@ def _doctor(paths: settings.Paths) -> None:
 def _setup(paths: settings.Paths) -> int:
     if _config_is_scheduled(paths):
         if not _yes_no(
-            "A managed schedule is enabled. Disable it before changing configuration?", default=False
+            "A managed schedule is enabled. Disable it before changing configuration?", default=True
         ):
             raise models.SyncError("Configuration unchanged; disable the managed schedule before setup.")
         disable_schedule(paths=paths)
@@ -103,12 +103,12 @@ def _setup(paths: settings.Paths) -> int:
     else:
         old = None
     original_configuration = paths.config_file.read_bytes() if paths.config_file.exists() else None
-    print(
-        "This tool copies only Busy blocks. Google-to-Outlook needs Google read access and Outlook write access; bidirectional mode also writes to Google."
-    )
-    direction = _prompt(
-        "Direction (google-to-outlook/both)", default=old.direction if old else "google-to-outlook"
-    )
+    print("Recommended: copy private Busy blocks in both directions; originals stay unchanged.")
+    print("Both directions require Google and Outlook calendar write permission.")
+    print("Press Enter to accept each recommendation. Browser consent still requires your approval.")
+    if old:
+        print(f"Saved direction: {old.direction}. Choose google-to-outlook to keep one-way copying.")
+    direction = _prompt("Direction (both/google-to-outlook)", default="both")
     if direction not in {"google-to-outlook", "both"}:
         raise models.SyncError("Direction must be google-to-outlook or both.")
     google_input = _prompt(
@@ -178,15 +178,30 @@ def _setup(paths: settings.Paths) -> int:
             state.invalidate_success(paths)
     except (OSError, ValueError):
         raise models.SyncError("Could not save configuration securely.") from None
-    if _yes_no("Authorize Google and Outlook now?", default=False):
+    if old and old.direction != current.direction:
+        print("The sync direction changed. Authorize again to grant the matching Google permissions.")
+    if _yes_no("Authorize Google and Outlook now?", default=True):
         _authorize("all", paths)
-    if _yes_no("Run a read-only connectivity check?", default=False):
+    else:
+        print("Authorization skipped. Existing grants may not match this configuration.")
+        print("To authorize later: calendar-busy-sync auth all")
+    if _yes_no("Run a read-only connectivity check?", default=True):
         _doctor(paths)
-    if _yes_no("Run the initial synchronization now?", default=False):
+    else:
+        print("Connectivity not checked. To check later: calendar-busy-sync doctor")
+    if _yes_no("Run the initial synchronization now (writes owned Busy copies)?", default=True):
         print(json.dumps(_run_sync(paths), sort_keys=True))
+        print("Initial synchronization succeeded.")
         if _yes_no("Enable a recurring schedule?", default=False):
             enable_schedule(paths=paths)
             print("Schedule enabled.")
+        else:
+            print("Automatic syncing is off. To enable: calendar-busy-sync schedule enable")
+    else:
+        print("Setup incomplete: configuration saved, but no sync was run for it.")
+        print("Next: calendar-busy-sync sync --dry-run")
+        print("Then: calendar-busy-sync sync")
+        print("Automatic syncing is off. After a successful sync: calendar-busy-sync schedule enable")
     return 0
 
 
