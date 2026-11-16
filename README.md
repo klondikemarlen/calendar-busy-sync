@@ -1,6 +1,6 @@
 # calendar-busy-sync
 
-Mirror unavailable time between Google Calendar and Outlook as private, anonymous Busy appointments. Calendar Busy Sync is a local Python CLI: no hosted sync service or calendar feed is required. Google-to-Outlook is the default; reciprocal sync is explicitly opt-in.
+Mirror unavailable time between Google Calendar and Outlook as private, anonymous Busy appointments. Calendar Busy Sync is a local Python CLI: no hosted sync service or calendar feed is required. Since version 1.1.1, interactive setup recommends bidirectional Busy-only sync; one-way Google-to-Outlook copying remains available. Upgrading alone does not change your saved direction.
 
 Visit the [project homepage](https://klondikemarlen.github.io/calendar-busy-sync/) and read the [privacy policy](https://klondikemarlen.github.io/calendar-busy-sync/privacy/) before connecting accounts.
 
