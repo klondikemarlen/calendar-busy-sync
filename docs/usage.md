@@ -95,7 +95,7 @@ Inspect the preview before explicitly running `calendar-busy-sync sync`. After s
 
 Other examples: `config set work-hours-enabled off`, `config set work-days mon tue wed thu fri`, and `config set days-forward 90`. Use `config set direction both` for bidirectional Busy-only copying, then run `calendar-busy-sync auth google` to grant matching permissions before syncing. Existing account settings and installation identity are preserved.
 
-**Event padding is not work-window padding.** `google-lead-minutes`/`google-trail-minutes` extend Google appointments in their Outlook copies; the `outlook-` equivalents extend Outlook appointments in Google. `work-lead-minutes`/`work-trail-minutes` only widen the work-hours filter and do not extend appointments. The listing reports how many per-event overrides exist; those override global event padding for the specified events and remain unchanged. Per-event editing remains the explicit private-file procedure below.
+**Event padding is not work-window padding.** `google-lead-minutes`/`google-trail-minutes` extend Google appointments in their Outlook copies; the `outlook-` equivalents extend Outlook appointments in Google. `work-lead-minutes`/`work-trail-minutes` only widen the work-hours filter and do not extend appointments.
 
 ## Work Hours and Travel Time
 
@@ -103,35 +103,23 @@ During `setup`, choose **Configure work hours and event padding?** to set the wo
 
 Work-window margins decide which appointments qualify; they do not extend an appointment. For example, 08:00–17:00 with 120 minutes on either side admits intervals overlapping 06:00–19:00 on the configured workdays. `Etc/GMT+7` means UTC-7 year-round; choose a regional IANA zone instead when the work schedule should follow daylight saving. Start/end use local wall time, with end later than start on the same day. Margins may cross midnight and remain anchored to the configured workday.
 
-Event lead/trail time separately expands the copied Busy block using elapsed minutes. An appointment at 10:15–10:25 with 60 minutes before and after becomes 09:15–11:25 in the destination. Originals never change. A per-event override replaces both directional defaults for that exact provider event/expanded occurrence ID; it does not apply automatically to the entire recurring series or infer travel from a title or location.
+Event lead/trail time separately expands every copied Busy block in that direction using elapsed minutes. An appointment at 10:15–10:25 with 60 minutes before and after becomes 09:15–11:25 in the destination. Originals never change. Padding does not depend on an appointment's identity, title, or location.
 
-For per-event overrides, disable the managed schedule before editing the private `config.json` under the configuration directory described below. Preserve its existing account fields and `installation_id`; merge these timing fields rather than replacing the whole file:
+To give all Google appointments one hour of travel time before and after their Outlook Busy copies:
 
-```json
-{
-  "work_hours_enabled": true,
-  "work_timezone": "Etc/GMT+7",
-  "work_days": ["mon", "tue", "wed", "thu", "fri"],
-  "work_start": "08:00",
-  "work_end": "17:00",
-  "work_lead_minutes": 120,
-  "work_trail_minutes": 120,
-  "google_lead_minutes": 0,
-  "google_trail_minutes": 0,
-  "outlook_lead_minutes": 0,
-  "outlook_trail_minutes": 0,
-  "event_padding_overrides": [
-    {
-      "source": "google",
-      "event_id": "synthetic-occurrence-id",
-      "lead_minutes": 60,
-      "trail_minutes": 60
-    }
-  ]
-}
+```sh
+calendar-busy-sync schedule disable
+calendar-busy-sync config set google-lead-minutes 60
+calendar-busy-sync config set google-trail-minutes 60
 ```
 
-`source` is `google` for Google-to-Outlook or `outlook` for Outlook-to-Google. Use unique source/event-ID pairs. Every minutes field must be an integer from 0 through 1440, and workdays must be unique lowercase names from `mon` through `sun`. Keep real event IDs and all account configuration outside Git.
+Every minutes field must be an integer from 0 through 1440, and workdays must be unique lowercase names from `mon` through `sun`.
+
+### Upgrading from Per-Event Padding
+
+Version 2.0 removes per-event padding. An empty legacy `event_padding_overrides` list is accepted and omitted the next time configuration is saved. A nonempty or invalid value stops configuration loading before calendar access; it is never silently ignored.
+
+If you receive that migration error, run `calendar-busy-sync schedule disable`, back up the private `config.json`, then remove its `event_padding_overrides` property. Preserve all other fields, especially account identifiers and `installation_id`. Use `config set` to choose the Google and Outlook directional padding that should apply to every appointment. Review a dry run, perform a successful sync, then explicitly re-enable your preferred schedule. Do not run setup to replace the configuration.
 
 The complete buffered interval is copied when it overlaps both the sync horizon and an eligible padded work window; it is never clipped or split. Touching a boundary without any overlap does not qualify. All-day and multi-day events qualify if any permitted window overlaps. Reads extend beyond the nominal horizon to include events whose travel padding overlaps it. Run `sync --dry-run` before applying changes: events that no longer qualify have only their owned copies removed. A successful sync under the changed configuration is required before re-enabling scheduling.
 

@@ -23,15 +23,8 @@ class TimingPolicy:
             "google": (settings.google_lead_minutes, settings.google_trail_minutes),
             "outlook": (settings.outlook_lead_minutes, settings.outlook_trail_minutes),
         }
-        self._overrides = {
-            (row["source"], row["event_id"]): (row["lead_minutes"], row["trail_minutes"])
-            for row in settings.event_padding_overrides
-        }
         self._max_lead = max((value[0] for value in self._defaults.values()), default=0)
         self._max_trail = max((value[1] for value in self._defaults.values()), default=0)
-        for lead, trail in self._overrides.values():
-            self._max_lead = max(self._max_lead, lead)
-            self._max_trail = max(self._max_trail, trail)
 
     def query_window(self, start: datetime, end: datetime) -> tuple[datetime, datetime]:
         """Expand nominal horizon to retrieve events whose padding can overlap it."""
@@ -42,7 +35,7 @@ class TimingPolicy:
     def desired_copy(self, source: str, event: Event, start: datetime, end: datetime) -> Event | None:
         if not event.busy or event.marker:
             return None
-        lead, trail = self._overrides.get((source, event.id), self._defaults[source])
+        lead, trail = self._defaults[source]
         buffered_start = self._instant(event.start) - timedelta(minutes=lead)
         buffered_end = self._instant(event.end) + timedelta(minutes=trail)
         if not self._overlaps(buffered_start, buffered_end, start, end):

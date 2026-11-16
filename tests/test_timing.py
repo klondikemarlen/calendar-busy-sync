@@ -21,7 +21,6 @@ class TimingPolicyTests(unittest.TestCase):
             google_trail_minutes=0,
             outlook_lead_minutes=0,
             outlook_trail_minutes=0,
-            event_padding_overrides=[],
         )
         return SimpleNamespace(**(base | values))
 
@@ -41,16 +40,8 @@ class TimingPolicyTests(unittest.TestCase):
             policy.desired_copy("google", Event("owned", start, end, marker="owned"), start, end)
         )
 
-    def test_padding_direction_and_override_precedence(self):
-        policy = TimingPolicy(
-            self.settings(
-                google_lead_minutes=30,
-                google_trail_minutes=10,
-                event_padding_overrides=[
-                    {"source": "google", "event_id": "special", "lead_minutes": 60, "trail_minutes": 20}
-                ],
-            )
-        )
+    def test_padding_depends_on_direction_not_event_identity(self):
+        policy = TimingPolicy(self.settings(google_lead_minutes=30, google_trail_minutes=10))
         start, end = datetime(2025, 1, 6, 8, tzinfo=UTC), datetime(2025, 1, 6, 18, tzinfo=UTC)
         ordinary = Event("ordinary", start + timedelta(minutes=5), end - timedelta(minutes=5))
         special = Event("special", start + timedelta(minutes=15), end - timedelta(minutes=45))
@@ -61,7 +52,7 @@ class TimingPolicyTests(unittest.TestCase):
         )
         copied = policy.desired_copy("google", special, start, end)
         self.assertEqual(
-            (copied.start, copied.end), (start - timedelta(minutes=45), end - timedelta(minutes=25))
+            (copied.start, copied.end), (start - timedelta(minutes=15), end - timedelta(minutes=35))
         )
         self.assertEqual(policy.desired_copy("outlook", ordinary, start, end), ordinary)
 
@@ -147,19 +138,11 @@ class TimingPolicyTests(unittest.TestCase):
         after = Event("after", day + timedelta(days=1, hours=2), day + timedelta(days=1, hours=3))
         self.assertIsNone(policy.desired_copy("outlook", after, start, end + timedelta(days=1)))
 
-    def test_query_horizon_uses_largest_defaults_and_overrides(self):
-        policy = TimingPolicy(
-            self.settings(
-                google_lead_minutes=20,
-                outlook_trail_minutes=35,
-                event_padding_overrides=[
-                    {"source": "outlook", "event_id": "x", "lead_minutes": 50, "trail_minutes": 40}
-                ],
-            )
-        )
+    def test_query_horizon_uses_largest_directional_padding(self):
+        policy = TimingPolicy(self.settings(google_lead_minutes=20, outlook_trail_minutes=35))
         start, end = datetime(2025, 1, 1, tzinfo=UTC), datetime(2025, 1, 2, tzinfo=UTC)
         self.assertEqual(
-            policy.query_window(start, end), (start - timedelta(minutes=40), end + timedelta(minutes=50))
+            policy.query_window(start, end), (start - timedelta(minutes=35), end + timedelta(minutes=20))
         )
 
 

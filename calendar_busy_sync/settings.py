@@ -96,7 +96,6 @@ class Settings:
     google_trail_minutes: int = 0
     outlook_lead_minutes: int = 0
     outlook_trail_minutes: int = 0
-    event_padding_overrides: list[dict] = field(default_factory=list)
 
     def validate(self):
         if self.direction not in ("google-to-outlook", "both"):
@@ -150,35 +149,6 @@ class Settings:
             value = getattr(self, name)
             if type(value) is not int or not 0 <= value <= 1440:
                 raise SyncError(f"{name} must be an integer from 0 to 1440.")
-        if not isinstance(self.event_padding_overrides, list):
-            raise SyncError("Event padding overrides must be a list.")
-        seen = set()
-        for override in self.event_padding_overrides:
-            if not isinstance(override, dict) or set(override) != {
-                "source",
-                "event_id",
-                "lead_minutes",
-                "trail_minutes",
-            }:
-                raise SyncError("Each event override needs source, event_id, lead_minutes and trail_minutes.")
-            source, event_id = override["source"], override["event_id"]
-            if (
-                source not in ("google", "outlook")
-                or not isinstance(event_id, str)
-                or not event_id.strip()
-                or "\n" in event_id
-                or "\r" in event_id
-            ):
-                raise SyncError(
-                    "Event overrides need a google/outlook source and a nonempty single-line event ID."
-                )
-            if (source, event_id) in seen:
-                raise SyncError("An event may have only one padding override.")
-            seen.add((source, event_id))
-            for name in ("lead_minutes", "trail_minutes"):
-                value = override[name]
-                if type(value) is not int or not 0 <= value <= 1440:
-                    raise SyncError("Event padding minutes must be integers from 0 to 1440.")
 
 
 def load_settings(paths: Paths) -> Settings:
@@ -188,6 +158,12 @@ def load_settings(paths: Paths) -> Settings:
         if not isinstance(configuration, dict) or "installation_id" not in configuration:
             raise SyncError(
                 "Existing configuration lost its installation identity; restore the original configuration."
+            )
+        if configuration.pop("event_padding_overrides", []) != []:
+            raise SyncError(
+                "Per-event padding is no longer supported. Run calendar-busy-sync schedule disable, "
+                "then remove event_padding_overrides from your private config.json. "
+                "Set directional padding with calendar-busy-sync config set before syncing again."
             )
         settings = Settings(**configuration)
         settings.validate()
