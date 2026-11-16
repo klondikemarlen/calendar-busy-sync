@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## [1.2.0](https://github.com/klondikemarlen/calendar-busy-sync/releases/tag/v1.2.0) - 2026-11-16
+
+### Added
+
+- Inspect and change operational sync settings with `config list`, `config get`, and `config set`, without repeating setup. Explain event padding separately from work-window margins, preserve per-event overrides and account identity, and require explicit synchronization after validated changes.
+
 ## [1.1.1](https://github.com/klondikemarlen/calendar-busy-sync/releases/tag/v1.1.1) - 2026-11-16
 
 ### Changed

@@ -76,6 +76,27 @@ calendar-busy-sync status
 
 A dry run previews operation counts, not private details, and does not satisfy the scheduling gate. A manual sync prints created/updated/deleted/unchanged counts. Nonzero exit status means the run did not finish successfully; scheduled runs never open an interactive sign-in prompt. Reauthorize explicitly with `calendar-busy-sync auth google` or `calendar-busy-sync auth outlook` when instructed.
 
+## Change Settings Without Repeating Setup
+
+Use `calendar-busy-sync config` (or `config list`) to see operational settings with descriptions and units. It excludes credentials, account identifiers, and event identifiers. `config get KEY` prints one value; `config set KEY VALUE` validates and saves one value. `config set --help` lists supported keys. Booleans accept `on`/`off` or `true`/`false`; weekdays accept space-separated names.
+
+For example, to add one hour before and after **all Google appointments copied to Outlook**, first disable any managed schedule, then set the two event-padding values:
+
+```sh
+calendar-busy-sync config get google-lead-minutes
+calendar-busy-sync schedule disable
+calendar-busy-sync config set google-lead-minutes 60
+calendar-busy-sync config set google-trail-minutes 60
+calendar-busy-sync config list
+calendar-busy-sync sync --dry-run
+```
+
+Inspect the preview before explicitly running `calendar-busy-sync sync`. After success, opt back into scheduling with `calendar-busy-sync schedule enable --minutes 5`, choosing your preferred interval rather than assuming it is restored automatically. Configuration commands never authorize accounts, change calendar events, or enable schedules. A real change invalidates the prior successful-configuration checkpoint; unchanged assignments preserve it. Mutations are refused while a sync holds the lock or the managed schedule is enabled.
+
+Other examples: `config set work-hours-enabled off`, `config set work-days mon tue wed thu fri`, and `config set days-forward 90`. Use `config set direction both` for bidirectional Busy-only copying, then run `calendar-busy-sync auth google` to grant matching permissions before syncing. Existing account settings and installation identity are preserved.
+
+**Event padding is not work-window padding.** `google-lead-minutes`/`google-trail-minutes` extend Google appointments in their Outlook copies; the `outlook-` equivalents extend Outlook appointments in Google. `work-lead-minutes`/`work-trail-minutes` only widen the work-hours filter and do not extend appointments. The listing reports how many per-event overrides exist; those override global event padding for the specified events and remain unchanged. Per-event editing remains the explicit private-file procedure below.
+
 ## Work Hours and Travel Time
 
 During `setup`, choose **Configure work hours and event padding?** to set the work timezone, weekdays, local start/end, independent work-window margins, and event padding for each direction. Skipping this step preserves existing choices. Legacy configurations remain unfiltered with zero event padding until explicitly configured.
