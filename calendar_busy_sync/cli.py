@@ -14,6 +14,24 @@ from . import __version__, auth, engine, health, models, registration, settings,
 from .schedule import ScheduleError, disable_schedule, enable_schedule, schedule_status
 
 
+_CONFIG_KEYS = {
+    "direction": "both or google-to-outlook; changing this requires Google reauthorization",
+    "days-back": "sync look-back days (0-365)",
+    "days-forward": "sync look-ahead days (1-730)",
+    "work-hours-enabled": "on/off; filter copies by the padded work window",
+    "work-timezone": "IANA timezone for work hours, such as America/Phoenix",
+    "work-days": "space-separated weekdays, such as mon tue wed thu fri",
+    "work-start": "work start in local 24-hour HH:MM",
+    "work-end": "work end in local 24-hour HH:MM",
+    "work-lead-minutes": "minutes before work starts included by the filter; NOT event padding",
+    "work-trail-minutes": "minutes after work ends included by the filter; NOT event padding",
+    "google-lead-minutes": "minutes before Google appointments in Outlook Busy copies (0-1440)",
+    "google-trail-minutes": "minutes after Google appointments in Outlook Busy copies (0-1440)",
+    "outlook-lead-minutes": "minutes before Outlook appointments in Google Busy copies (0-1440)",
+    "outlook-trail-minutes": "minutes after Outlook appointments in Google Busy copies (0-1440)",
+}
+
+
 def _prompt(text: str, *, default: str = "") -> str:
     if not sys.stdin.isatty():
         raise models.SyncError("Setup requires an interactive terminal; rerun from a terminal.")
@@ -220,6 +238,70 @@ def _run_sync(paths: settings.Paths, dry_run: bool = False) -> dict:
     return engine.run_sync(None, paths, dry_run=dry_run)
 
 
+def _display_config_value(value) -> str:
+    if isinstance(value, bool):
+        return "on" if value else "off"
+    if isinstance(value, list):
+        return " ".join(value)
+    return str(value)
+
+
+def _parse_config_value(text: str, previous):
+    if isinstance(previous, bool):
+        if text.lower() not in {"on", "off", "true", "false"}:
+            raise models.SyncError("Use on or off for work-hours-enabled.")
+        return text.lower() in {"on", "true"}
+    if isinstance(previous, int):
+        try:
+            return int(text)
+        except ValueError:
+            raise models.SyncError("Use a whole number for this setting.") from None
+    if isinstance(previous, list):
+        return text.lower().split()
+    return text
+
+
+def _config(args: argparse.Namespace, paths: settings.Paths) -> None:
+    if args.config_action in (None, "list"):
+        current = settings.load_settings(paths)
+        for key, description in _CONFIG_KEYS.items():
+            value = _display_config_value(getattr(current, key.replace("-", "_")))
+            print(f"{key} = {value}\n  {description}")
+        count = len(current.event_padding_overrides)
+        print(f"Per-event padding overrides: {count}. Overrides replace directional event padding.")
+        print("Credentials, account identifiers, and event identifiers are not displayed or editable here.")
+        return
+    field = args.key.replace("-", "_")
+    if args.config_action == "get":
+        print(_display_config_value(getattr(settings.load_settings(paths), field)))
+        return
+    with engine.sync_lock(paths):
+        current = settings.load_settings(paths)
+        previous = getattr(current, field)
+        value = _parse_config_value(" ".join(args.value), previous)
+        updated = replace(current, **{field: value})
+        updated.validate()
+        if updated == current:
+            print(f"{args.key} is already {_display_config_value(value)}; configuration unchanged.")
+            return
+        if _config_is_scheduled(paths):
+            raise models.SyncError(
+                "Configuration unchanged: disable automatic syncing first with "
+                "calendar-busy-sync schedule disable, then repeat config set."
+            )
+        settings.save_settings(paths, updated)
+        state.invalidate_success(paths)
+    print(f"{args.key}: {_display_config_value(previous)} -> {_display_config_value(value)}")
+    print("Configuration saved. No calendar events changed; automatic syncing is off.")
+    if args.key == "direction":
+        print("Before syncing, reauthorize Google: calendar-busy-sync auth google")
+    if args.key.startswith(("google-", "outlook-")) and updated.event_padding_overrides:
+        print("Existing per-event overrides still replace directional padding for those events.")
+    print("Preview: calendar-busy-sync sync --dry-run")
+    print("Apply: calendar-busy-sync sync")
+    print("After a successful sync, opt in again: calendar-busy-sync schedule enable --minutes 15")
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="calendar-busy-sync", description="Copy busy-only calendar blocks between Google and Outlook."
@@ -227,6 +309,15 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"calendar-busy-sync {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("setup", help="configure accounts interactively")
+    config = sub.add_parser("config", help="inspect or change sync settings without repeating setup")
+    config.set_defaults(config_action=None)
+    config_sub = config.add_subparsers(dest="config_action")
+    config_sub.add_parser("list", help="show operational settings, units, and descriptions")
+    get = config_sub.add_parser("get", help="print one setting")
+    get.add_argument("key", choices=_CONFIG_KEYS)
+    set_config = config_sub.add_parser("set", help="validate and save a setting; never sync automatically")
+    set_config.add_argument("key", choices=_CONFIG_KEYS)
+    set_config.add_argument("value", nargs="+")
     auth_parser = sub.add_parser("auth", help="authorize calendar accounts")
     auth_parser.add_argument("provider", nargs="?", choices=("google", "outlook", "all"), default="all")
     sync_parser = sub.add_parser("sync", help="synchronize busy blocks")
@@ -251,6 +342,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _setup(paths)
         if args.command == "auth":
             _authorize(args.provider, paths)
+        elif args.command == "config":
+            _config(args, paths)
         elif args.command == "sync":
             result = _run_sync(paths, args.dry_run)
             print(json.dumps(result, sort_keys=True))
