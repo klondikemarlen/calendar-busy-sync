@@ -4,6 +4,8 @@ Mirror unavailable time between Google Calendar and Outlook as private, anonymou
 
 Visit the [project homepage](https://klondikemarlen.github.io/calendar-busy-sync/) and read the [privacy policy](https://klondikemarlen.github.io/calendar-busy-sync/privacy/) before connecting accounts.
 
+For an organization-managed deployment instead of storing both grants on an employee's computer, see [private calendar connectors](docs/connectors.md). Each side holds only its own provider grants. Employees enroll and pair individually before any Busy intervals are exchanged.
+
 ## Install and Use
 
 On Ubuntu 26.04, install from the [project PPA](https://launchpad.net/~klondikemarlen/+archive/ubuntu/calendar-busy-sync) using the [installation and upgrade instructions](docs/packaging.md#install-from-the-ppa). Installation does not authorize accounts, synchronize events, or enable scheduling.
