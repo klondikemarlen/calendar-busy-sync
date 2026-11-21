@@ -13,6 +13,7 @@ from test_engine import MemoryCalendar
 from calendar_busy_sync import connector
 from calendar_busy_sync.connector_runtime import Config, database
 from calendar_busy_sync.connector_store import Store
+from calendar_busy_sync.connector_timing import SharingHours
 from calendar_busy_sync.models import Event, SyncError
 
 
@@ -89,10 +90,15 @@ class ExchangeTests(unittest.TestCase):
         self.local("microsoft", "confirm", "WORK_SUBJECT", confirmation)
         self.assertEqual(connector.synchronize(work), 1)
         self.assertEqual(connector.synchronize(work), 1)
+        pair_id = self.local("microsoft", "account", "WORK_SUBJECT")[0]
+        provider_namespaces = set()
         for calendar, original in ((google, official), (outlook, personal)):
             self.assertEqual(len(calendar.writes), 1)
             (copy,) = [e for e in calendar.events.values() if e.marker]
             self.assertEqual((copy.start, copy.end), (original.start, original.end))
+            self.assertNotIn(pair_id, copy.marker)
+            provider_namespaces.add(copy.marker.split(":")[1])
+        self.assertEqual(len(provider_namespaces), 2)
         for path, payload, result in self.messages:
             wire = json.dumps([payload, result])
             for private in ("WORK_", "PERSONAL_", "OTHER_"):
@@ -114,6 +120,33 @@ class ExchangeTests(unittest.TestCase):
         self.local("google", "disconnect", "PERSONAL_SUBJECT")
         self.assertEqual(connector.synchronize(work), 0)
         self.assertEqual(self.local("microsoft", "account", "OTHER_SUBJECT"), (None, False))
+
+    def test_outlook_receives_only_the_padded_time_inside_its_incoming_window(self):
+        day, _ = connector._window()
+        afternoon = Event("afternoon", day + timedelta(hours=16), day + timedelta(hours=18))
+        evening = Event("evening", day + timedelta(hours=20), day + timedelta(hours=21))
+        self.calendars["google", "g"] = MemoryCalendar([afternoon, evening])
+        outlook = self.calendars["microsoft", "m"] = MemoryCalendar([evening])
+        self.local("google", "enroll", "sender", "g")
+        self.local("microsoft", "enroll", "receiver", "m")
+        self.local(
+            "google",
+            "save_sharing_hours",
+            "sender",
+            SharingHours(enabled=True, days="mon tue wed thu fri sat sun", lead=15, trail=10),
+        )
+        self.local("google", "enroll", "sender", "g")  # Reauthorization must not widen disclosure.
+        invitation = self.local("microsoft", "offer", "receiver")
+        confirmation = self.local("google", "join", "sender", invitation)
+        self.local("microsoft", "confirm", "receiver", confirmation)
+        connector.synchronize(self.hosts["microsoft"][0])
+
+        copies = [(e.start, e.end) for e in outlook.events.values() if e.marker]
+        self.assertEqual(copies, [(day + timedelta(hours=15, minutes=45), day + timedelta(hours=17))])
+        pulls = [response for path, _, response in self.messages if path == "/peer/pull"]
+        self.assertEqual(pulls[0]["intervals"], [[f"{day:%Y-%m-%d}T15:45:00Z", f"{day:%Y-%m-%d}T17:00:00Z"]])
+        reverse = [e for e in self.calendars["google", "g"].events.values() if e.marker]
+        self.assertEqual([(e.start, e.end) for e in reverse], [(evening.start, evening.end)])
 
     def test_missing_peer_permission_and_unenrolled_pair_cannot_read_any_calendar(self):
         day, _ = connector._window()

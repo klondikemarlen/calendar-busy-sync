@@ -4,9 +4,19 @@ Use this mode when employees should connect two accounts without putting their w
 
 ## What an employee authorizes
 
-Deployment, an administrator's approval of a delegated permission, visiting the enrollment page, and signing in **do not pair calendars**. On each connector, the employee reads the permission disclosure, checks the consent box, and signs in with the provider in the browser. On the work connector, generate a pairing invitation. Enter it on the Google connector and bring the resulting confirmation code back to the signed-in work connector. Confirm the transfer. Codes expire after ten minutes; treat both as private. No identity or email matching across domains is assumed: this proves control of the two sessions, not that both providers verified the same legal person. A work account and Google account can each have only one active pair.
+Deployment, administrator approval, visiting the enrollment page, and signing in **do not pair calendars**. On each connector, read the permission disclosure, check the consent box, and sign in with that provider. Set the times that calendar may send to its peer. Generate an invitation on the Microsoft connector, enter it on the Google connector, and bring the confirmation code back to the signed-in Microsoft connector. Confirm the transfer. Codes expire after ten minutes; treat both as private. This proves control of the two sessions, not that both providers verified the same legal person. Each account can have only one active pair.
 
 The sync writes real, private `Busy` appointments to each **primary calendar**. Microsoft's **Can view when I'm busy** and Google's **See only free/busy** are viewer permissions, not permissions to write those appointments. Neither connector publishes a calendar or changes its sharing policy. No event-detail sharing option exists. The agency must authorize the transfer of work timing to this Google destination; a coworker's Scheduling Assistant access does not authorize it. Managed Google accounts can also require administrator approval.
+
+The source provider already hosts its own events. The destination provider learns that its user is busy at the copied times; the application cannot hide an appointment from the provider storing it. Connector copies have no origin note or common cross-provider pairing identifier. People already entitled to see availability on the destination calendar may see the new interval under those existing permissions.
+
+### Share only the time the other calendar needs
+
+Set the outgoing rules on the calendar that holds the originals. For example, to keep evenings off a work Outlook calendar, set the **Google → Outlook** sharing window on the Google connector. Choose the time zone, days and local hours, and any minutes to block before or after appointments. Padding applies first; the connector sends only the part inside the window. With a 09:00–17:00 window, a padded 16:30–17:30 appointment sends 16:30–17:00. An appointment whose padded time falls entirely after 17:00 sends nothing. The original does not change.
+
+The reverse direction has independent settings. Neither account is classified as work or personal. Without a sharing window or padding, pairing shares the unpadded busy intervals in the rolling 30-day horizon. Restricting an existing window changes eligible copies on the next successful sync; it cannot undo earlier disclosure.
+
+### What crosses the boundary
 
 | Boundary | Stored or exchanged |
 | --- | --- |

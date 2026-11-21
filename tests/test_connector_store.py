@@ -5,10 +5,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from calendar_busy_sync.models import SyncError
-# isort: split
-
 from calendar_busy_sync.connector_store import Store
+from calendar_busy_sync.models import SyncError
 
 
 class MemoryPeer:

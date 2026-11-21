@@ -1,13 +1,16 @@
 """Local consent, provider grants, and durable peer unlink notices."""
 
 import hashlib
+import json
 import re
 import secrets
 import sqlite3
 import time
 from collections.abc import Callable
 from contextlib import contextmanager
+from dataclasses import asdict
 
+from .connector_timing import SharingHours
 from .models import SyncError
 
 _CODE_LIFETIME_SECONDS = 10 * 60
@@ -41,6 +44,10 @@ class Store:
                 CHECK ((pair_id IS NULL) = (phase = 'unpaired')),
                 CHECK ((expires_at IS NOT NULL) = (phase IN ('joining', 'pending', 'confirming')))
             );
+            CREATE TABLE IF NOT EXISTS connector_sharing_hours (
+                subject TEXT PRIMARY KEY REFERENCES connector_accounts(subject) ON DELETE CASCADE,
+                policy TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS connector_invitations (
                 subject TEXT NOT NULL PRIMARY KEY,
                 digest TEXT NOT NULL UNIQUE,
@@ -59,13 +66,19 @@ class Store:
         if not isinstance(subject, str) or not subject:
             raise SyncError("The provider did not identify a calendar account.")
 
-        self.db.execute(
-            """
-            INSERT INTO connector_accounts (subject, grant_text) VALUES (?, ?)
-            ON CONFLICT (subject) DO UPDATE SET grant_text = excluded.grant_text
-            """,
-            (subject, grant_text),
-        )
+        with self._transaction():
+            self.db.execute(
+                """
+                INSERT INTO connector_accounts (subject, grant_text) VALUES (?, ?)
+                ON CONFLICT (subject) DO UPDATE SET grant_text = excluded.grant_text
+                """,
+                (subject, grant_text),
+            )
+            self.db.execute(
+                "INSERT INTO connector_sharing_hours (subject, policy) VALUES (?, ?) "
+                "ON CONFLICT (subject) DO NOTHING",
+                (subject, json.dumps(asdict(SharingHours()))),
+            )
 
     def account(self, subject: str) -> tuple[str | None, bool] | None:
         self._expire_codes(time.time())
@@ -77,6 +90,28 @@ class Store:
 
         pair_id, phase = row
         return pair_id, phase == "active"
+
+    def sharing_hours(self, subject: str) -> SharingHours:
+        row = self.db.execute(
+            "SELECT policy FROM connector_sharing_hours WHERE subject = ?", (subject,)
+        ).fetchone()
+        return _read_hours(row)
+
+    def pair_sharing_hours(self, pair_id: str) -> SharingHours:
+        row = self.db.execute(
+            "SELECT policy FROM connector_accounts JOIN connector_sharing_hours USING (subject) "
+            "WHERE pair_id = ? AND phase = 'active'",
+            (pair_id,),
+        ).fetchone()
+        return _read_hours(row)
+
+    def save_sharing_hours(self, subject: str, hours: SharingHours) -> None:
+        result = self.db.execute(
+            "UPDATE connector_sharing_hours SET policy = ? WHERE subject = ?",
+            (json.dumps(asdict(hours)), subject),
+        )
+        if result.rowcount != 1:
+            raise SyncError("Sign in again before changing sharing hours.")
 
     def offer(self, subject: str) -> str:
         self._require_role("microsoft")
@@ -395,3 +430,14 @@ def _peer_pair_id(payload: dict) -> str:
 def _require_grant(grant_text: str) -> None:
     if not isinstance(grant_text, str) or not grant_text:
         raise SyncError("The provider did not grant calendar access.")
+
+
+def _read_hours(row) -> SharingHours:
+    if row is not None:
+        try:
+            fields = json.loads(row[0])
+            if isinstance(fields, dict) and fields.keys() == SharingHours.__dataclass_fields__.keys():
+                return SharingHours(**fields)
+        except (TypeError, ValueError):
+            pass
+    raise SyncError("Sharing hours are unavailable; no busy times were exported.")

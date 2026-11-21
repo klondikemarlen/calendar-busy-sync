@@ -11,7 +11,8 @@ from functools import partial
 from urllib.parse import urlsplit
 
 from .connector_busy import apply_snapshot, export_snapshot
-from .connector_enrollment import Enrollment, calendar_client
+from .connector_enrollment import Enrollment
+from .connector_oauth import calendar_client
 from .connector_runtime import MAX_PAYLOAD, Config, Occupied, call_peer, database
 from .connector_store import Store
 from .models import SyncError
@@ -30,6 +31,11 @@ def _calendar(config, store, pair_id):
     return client
 
 
+def _ownership_namespace(config, pair_id):
+    # Do not write the wire pairing identifier or a common identifier to both providers.
+    return hmac.digest(bytes.fromhex(pair_id), config.role.encode("ascii"), "sha256").hex()
+
+
 def _peer_operation(config, store, path, payload):
     if path not in ("/peer/pull", "/peer/apply"):
         return store.peer(path, payload)
@@ -46,21 +52,24 @@ def _peer_operation(config, store, path, payload):
         raise SyncError("Snapshot dates differ; retry a fresh synchronization.")
     client = _calendar(config, store, pair_id)
     if path == "/peer/pull":
-        return {**payload, "intervals": export_snapshot(client, start, end)}
-    apply_snapshot(client, pair_id, start, end, payload["intervals"])
+        return {
+            **payload,
+            "intervals": export_snapshot(client, start, end, store.pair_sharing_hours(pair_id)),
+        }
+    apply_snapshot(client, _ownership_namespace(config, pair_id), start, end, payload["intervals"])
     return {}
 
 
 def _sync_pair(config, store, peer, pair_id):
     start, end = _window()
     request = {"pair_id": pair_id, "day": start.date().isoformat()}
-    work = _calendar(config, store, pair_id)
-    work_intervals = export_snapshot(work, start, end)
-    personal = peer("/peer/pull", request)
-    if set(personal) != {*request, "intervals"} or any(personal[k] != v for k, v in request.items()):
+    microsoft = _calendar(config, store, pair_id)
+    outbound = export_snapshot(microsoft, start, end, store.pair_sharing_hours(pair_id))
+    inbound = peer("/peer/pull", request)
+    if set(inbound) != {*request, "intervals"} or any(inbound[k] != v for k, v in request.items()):
         raise SyncError("Peer returned a different pair or time window; synchronization stopped.")
-    apply_snapshot(work, pair_id, start, end, personal["intervals"])
-    if peer("/peer/apply", {**request, "intervals": work_intervals}) != {}:
+    apply_snapshot(microsoft, _ownership_namespace(config, pair_id), start, end, inbound["intervals"])
+    if peer("/peer/apply", {**request, "intervals": outbound}) != {}:
         raise SyncError("Peer did not confirm the Busy snapshot.")
 
 
