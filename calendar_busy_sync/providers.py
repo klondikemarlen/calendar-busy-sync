@@ -234,7 +234,6 @@ class GoogleCalendarClient(_HttpClient):
     def _body(event: Event, marker: str, event_id: str | None = None):
         body = {
             "summary": "Busy",
-            "description": "From work calendar.",
             "visibility": "private",
             "reminders": {"useDefault": False},
             "attendees": [],
@@ -243,6 +242,8 @@ class GoogleCalendarClient(_HttpClient):
             "transparency": "opaque",
             "extendedProperties": {"private": {_KEY: marker}},
         }
+        if not marker.startswith("cbs2:"):
+            body["description"] = "From work calendar."
         if event_id:
             body["id"] = event_id
         return body
@@ -388,7 +389,6 @@ class OutlookCalendarClient(_HttpClient):
     def _body(event: Event, marker: str, transaction_id: str | None = None):
         body = {
             "subject": "Busy",
-            "body": {"contentType": "text", "content": "From personal calendar."},
             "sensitivity": "private",
             "isReminderOn": False,
             "attendees": [],
@@ -399,6 +399,8 @@ class OutlookCalendarClient(_HttpClient):
             "showAs": "busy",
             "singleValueExtendedProperties": [{"id": GRAPH_PROPERTY_ID, "value": marker}],
         }
+        if not marker.startswith("cbs2:"):
+            body["body"] = {"contentType": "text", "content": "From personal calendar."}
         if transaction_id:
             body["transactionId"] = transaction_id
         return body

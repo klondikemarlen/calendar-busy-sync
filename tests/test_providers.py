@@ -33,6 +33,17 @@ class ScriptedSession:
 
 
 class ProviderTests(unittest.TestCase):
+    def test_connector_copies_do_not_identify_the_source_to_either_provider(self):
+        event = Event("private-source-id", START, END)
+        marker = "cbs2:" + "1" * 64 + ":" + "2" * 64 + ":0"
+        google = GoogleCalendarClient._body(event, marker)
+        outlook = OutlookCalendarClient._body(event, marker)
+        self.assertEqual((google["summary"], google["visibility"]), ("Busy", "private"))
+        self.assertEqual((outlook["subject"], outlook["sensitivity"]), ("Busy", "private"))
+        self.assertNotIn("description", google)
+        self.assertNotIn("body", outlook)
+        self.assertNotIn(event.id, json.dumps([google, outlook]))
+
     def test_google_all_day_uses_calendar_timezone_across_dst(self):
         session = ScriptedSession(
             [
