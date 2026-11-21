@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- Separately operated Microsoft and Google connectors can mirror private Busy appointments after individual sign-in and bilateral pairing. No installation-time enrollment, public calendar sharing, or changes to the local CLI.
+- Each connector can restrict the busy time it sends to selected local days and hours. Optional appointment padding is clipped at the window boundaries before anything is sent. The two directions are independent.
+
 ## [2.0.0](https://github.com/klondikemarlen/calendar-busy-sync/releases/tag/v2.0.0) - 2026-11-16
 
 ### Removed

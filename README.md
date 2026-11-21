@@ -4,6 +4,14 @@ Mirror unavailable time between Google Calendar and Outlook as private, anonymou
 
 Visit the [project homepage](https://klondikemarlen.github.io/calendar-busy-sync/) and read the [privacy policy](https://klondikemarlen.github.io/calendar-busy-sync/privacy/) before connecting accounts.
 
+For an organization-managed deployment instead of storing both grants on an employee's computer, see [private calendar connectors](docs/connectors.md). Each side holds only its own provider grants. Employees enroll and pair individually before any Busy intervals are exchanged.
+
+## OAuth administration
+
+- **Google (maintainers):** [Open the Calendar Busy Sync project in Google Auth Platform](https://console.cloud.google.com/auth/overview?project=calendar-busy-sync-d8462f13) to manage OAuth branding, audience, clients, and verification. Access requires a Google account with permission to that project. This is not the calendar sign-in link for users.
+- **Microsoft (operators):** Open **App registrations** in the [Microsoft Entra admin center](https://entra.microsoft.com/). For the [self-hosted connector](docs/connectors.md#operator-setup-for-a-pilot), register a single-tenant web app in the organization's own directory and keep its credential there.
+- **Microsoft (cross-company distribution):** To offer one project-owned app identity, the publisher would register a [multitenant app](https://learn.microsoft.com/en-us/entra/identity-platform/single-and-multi-tenant-apps). Consent creates an [Enterprise application in each customer tenant](https://learn.microsoft.com/en-us/entra/identity-platform/app-objects-and-service-principals); IT can restrict or revoke it. Consent does not deploy the connector or enroll calendars. A shared registration for desktop sign-in is tracked separately in [#46](https://github.com/klondikemarlen/calendar-busy-sync/issues/46).
+
 ## Install and Use
 
 On Ubuntu 26.04, install from the [project PPA](https://launchpad.net/~klondikemarlen/+archive/ubuntu/calendar-busy-sync) using the [installation and upgrade instructions](docs/packaging.md#install-from-the-ppa). Installation does not authorize accounts, synchronize events, or enable scheduling.
