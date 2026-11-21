@@ -159,7 +159,7 @@ class ConnectorBusyTests(unittest.TestCase):
 
     def test_export_uses_each_sources_local_weekdays_independently(self):
         calendar = MemoryCalendar(event("spans-several-days", 0, 96))
-        friday = SharingHours(enabled=True, zone="America/Vancouver", days="fri", start="16:00", end="18:00")
+        friday = SharingHours(enabled=True, zone="Etc/GMT+8", days="fri", start="16:00", end="18:00")
         saturday = replace(friday, days="sat")
 
         self.assertEqual(
