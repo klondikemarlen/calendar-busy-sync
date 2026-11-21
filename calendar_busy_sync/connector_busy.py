@@ -5,6 +5,7 @@ from collections import defaultdict
 from datetime import UTC, datetime, time, timedelta
 from hashlib import sha256
 
+from .connector_timing import SharingHours
 from .models import CalendarClient, CopyIdUnavailable, Event, SyncError
 
 MAX_INTERVALS = 4096
@@ -12,27 +13,27 @@ _PAIR_ID = re.compile(r"[0-9a-f]{64}")
 _TIMESTAMP = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")
 _MARKER = re.compile(r"cbs2:([0-9a-f]{64}):([0-9a-f]{64}):[0-9a-f]")
 _MAX_COPY_GENERATIONS = 16
+_DEFAULT_SHARING_HOURS = SharingHours()
 
 
-def export_snapshot(client: CalendarClient, start: datetime, end: datetime) -> list[list[str]]:
-    """Read a complete view, then return clipped, sorted, non-touching UTC intervals."""
+def export_snapshot(
+    client: CalendarClient, start: datetime, end: datetime, hours: SharingHours = _DEFAULT_SHARING_HOURS
+) -> list[list[str]]:
+    """Read originals and return their padded, clipped union as UTC intervals."""
     _validate_window(start, end)
-    originals = []
-    for event in _list_events(client, start, end):
-        # The adapters use this field solely for the app's private metadata, including legacy copies.
-        if not event.busy or event.marker:
-            continue
-        clipped_start = max(start, event.start.astimezone(UTC))
-        clipped_end = min(end, event.end.astimezone(UTC))
-        if clipped_start < clipped_end:
-            # A whole-second wire representation must not understate real Busy time.
-            clipped_start = clipped_start.replace(microsecond=0)
-            if clipped_end.microsecond:
-                clipped_end = clipped_end.replace(microsecond=0) + timedelta(seconds=1)
-            originals.append((clipped_start, clipped_end))
+    start, end = start.astimezone(UTC), end.astimezone(UTC)
+    query_start, query_end = hours.query_window(start, end)
+    # The adapters use this field solely for the app's private metadata, including legacy copies.
+    originals = (
+        event for event in _list_events(client, query_start, query_end) if event.busy and not event.marker
+    )
 
     union: list[tuple[datetime, datetime]] = []
-    for interval_start, interval_end in sorted(originals):
+    for interval_start, interval_end in sorted(hours.project(originals, start, end)):
+        # Sharing boundaries use whole seconds, so outward rounding cannot cross them.
+        interval_start = interval_start.replace(microsecond=0)
+        if interval_end.microsecond:
+            interval_end = interval_end.replace(microsecond=0) + timedelta(seconds=1)
         if union and interval_start <= union[-1][1]:
             previous_start, previous_end = union[-1]
             union[-1] = previous_start, max(previous_end, interval_end)

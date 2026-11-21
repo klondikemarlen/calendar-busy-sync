@@ -2,8 +2,12 @@ import unittest
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta, timezone
 
-from calendar_busy_sync.connector_busy import MAX_INTERVALS, apply_snapshot, cleanup_owned, export_snapshot
+from calendar_busy_sync.connector_timing import SharingHours
 from calendar_busy_sync.models import CopyIdUnavailable, Event, SyncError
+
+# isort: split
+
+from calendar_busy_sync.connector_busy import MAX_INTERVALS, apply_snapshot, cleanup_owned, export_snapshot
 
 START = datetime(2026, 11, 20, tzinfo=UTC)
 END = START + timedelta(days=30)
@@ -119,6 +123,113 @@ class ConnectorBusyTests(unittest.TestCase):
         self.assertEqual(
             export_snapshot(calendar, START, END),
             [["2026-11-20T00:00:00Z", "2026-11-20T00:00:01Z"]],
+        )
+
+    def test_export_includes_padding_only_overlaps_at_both_horizon_edges(self):
+        calendar = MemoryCalendar(
+            Event("before", START - timedelta(minutes=50), START - timedelta(minutes=10)),
+            Event("after", END + timedelta(minutes=15), END + timedelta(minutes=50)),
+            Event("copy", START - timedelta(minutes=30), START - timedelta(minutes=5), marker="cbs1:legacy"),
+        )
+        hours = SharingHours(lead=45, trail=30)
+
+        self.assertEqual(
+            export_snapshot(calendar, START, END, hours),
+            [
+                ["2026-11-20T00:00:00Z", "2026-11-20T00:20:00Z"],
+                ["2026-12-19T23:30:00Z", "2026-12-20T00:00:00Z"],
+            ],
+        )
+
+    def test_export_merges_padded_intervals_only_inside_the_daily_window(self):
+        calendar = MemoryCalendar(
+            Event(
+                "before-opening",
+                START + timedelta(hours=8, minutes=45),
+                START + timedelta(hours=8, minutes=55),
+            ),
+            Event("during-window", START + timedelta(hours=9, minutes=45), START + timedelta(hours=10)),
+        )
+        hours = SharingHours(lead=30, trail=30, enabled=True, days="fri", start="09:00", end="10:15")
+
+        self.assertEqual(
+            export_snapshot(calendar, START, END, hours),
+            [["2026-11-20T09:00:00Z", "2026-11-20T10:15:00Z"]],
+        )
+
+    def test_export_uses_each_sources_local_weekdays_independently(self):
+        calendar = MemoryCalendar(event("spans-several-days", 0, 96))
+        friday = SharingHours(enabled=True, zone="America/Vancouver", days="fri", start="16:00", end="18:00")
+        saturday = replace(friday, days="sat")
+
+        self.assertEqual(
+            export_snapshot(calendar, START, END, friday),
+            [["2026-11-21T00:00:00Z", "2026-11-21T02:00:00Z"]],
+        )
+        self.assertEqual(
+            export_snapshot(calendar, START, END, saturday),
+            [["2026-11-22T00:00:00Z", "2026-11-22T02:00:00Z"]],
+        )
+
+    def test_export_clips_local_dates_that_cross_the_utc_cutoffs(self):
+        hours = SharingHours(enabled=True, zone="Asia/Tokyo", days="fri sun", start="00:00", end="12:00")
+        calendar = MemoryCalendar(
+            event("first-day", -2, 5),
+            event("last-day", 710, 730),
+        )
+
+        self.assertEqual(
+            export_snapshot(calendar, START, END, hours),
+            [
+                ["2026-11-20T00:00:00Z", "2026-11-20T03:00:00Z"],
+                ["2026-12-19T15:00:00Z", "2026-12-20T00:00:00Z"],
+            ],
+        )
+
+    def test_export_closes_during_the_excluded_part_of_a_fall_fold(self):
+        start = datetime(2026, 4, 4, tzinfo=UTC)
+        end = start + timedelta(days=1)
+        calendar = MemoryCalendar(Event("spans-fold", start, end))
+        hours = SharingHours(enabled=True, zone="Australia/Lord_Howe", days="sun", start="01:45", end="02:15")
+
+        self.assertEqual(
+            export_snapshot(calendar, start, end, hours),
+            [
+                ["2026-04-04T14:45:00Z", "2026-04-04T15:00:00Z"],
+                ["2026-04-04T15:15:00Z", "2026-04-04T15:45:00Z"],
+            ],
+        )
+
+    def test_export_starts_at_the_first_real_local_time_after_a_spring_gap(self):
+        start = datetime(2026, 3, 8, tzinfo=UTC)
+        end = start + timedelta(days=1)
+        calendar = MemoryCalendar(Event("spans-gap", start, end))
+        hours = SharingHours(enabled=True, zone="America/New_York", days="sun", start="02:15", end="03:30")
+
+        self.assertEqual(
+            export_snapshot(calendar, start, end, hours),
+            [["2026-03-08T07:00:00Z", "2026-03-08T07:30:00Z"]],
+        )
+
+    def test_export_omits_a_window_entirely_inside_a_spring_gap(self):
+        start = datetime(2026, 3, 8, tzinfo=UTC)
+        end = start + timedelta(days=1)
+        calendar = MemoryCalendar(Event("spans-gap", start, end))
+        hours = SharingHours(enabled=True, zone="America/New_York", days="sun", start="02:15", end="02:45")
+
+        self.assertEqual(export_snapshot(calendar, start, end, hours), [])
+
+    def test_export_bounds_projection_of_very_long_events_to_the_horizon(self):
+        start = START
+        end = start + timedelta(days=1)
+        beginning = datetime.min.replace(tzinfo=UTC)
+        ending = datetime.max.replace(tzinfo=UTC)
+        calendar = MemoryCalendar(Event("spans-calendar", beginning, ending))
+        hours = SharingHours(lead=1440, trail=1440, enabled=True, days="fri")
+
+        self.assertEqual(
+            export_snapshot(calendar, start, end, hours),
+            [["2026-11-20T09:00:00Z", "2026-11-20T17:00:00Z"]],
         )
 
     def test_move_cancel_and_repeat_preserve_overlapping_originals_and_other_pair(self):
