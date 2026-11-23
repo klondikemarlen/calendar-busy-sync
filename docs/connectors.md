@@ -38,6 +38,10 @@ Each connector reads enough local event data to exclude the copies it created. S
 
 ## Register the Microsoft connector
 
+Run `python -m calendar_busy_sync.connector setup` in an administrator's terminal to create the Microsoft web registration and Enterprise application interactively. This can run on an admin workstation with Calendar Busy Sync installed; it does not need connector configuration or an employee's login. Supply the tenant UUID and the deployed connector's HTTPS origin. Setup uses an isolated Azure CLI login, confirms the tenant and callback before writing, and prints the public IDs. Complete credential creation and consent review as described below.
+
+If you already have a registration or lack administrator access, decline creation. Ask the authorized admin to run setup if a new registration is needed. The admin hands the public IDs and expiring credential to the deployment operator through approved channels. Employees only visit the deployed connector's enrollment page; do not give them the server credential. The manual equivalent follows.
+
 Use Bash and Azure CLI as an operator authorized to register apps in the intended commercial Microsoft 365 tenant. This recipe is for the server connector, not the desktop CLI's public-client registration. It needs an existing Entra directory and an HTTPS connector origin, not an Azure compute subscription.
 
 In a fresh Bash shell, enter the directory ID and the actual connector origin (no trailing slash). Check the active directory **before** creating anything:

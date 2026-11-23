@@ -16,6 +16,7 @@ from .connector_oauth import calendar_client
 from .connector_runtime import MAX_PAYLOAD, Config, Occupied, call_peer, database
 from .connector_store import Store
 from .models import SyncError
+from .registration import setup_microsoft_connector
 
 
 def _window():
@@ -150,11 +151,19 @@ def application():
 def main():
     parser = argparse.ArgumentParser(description="Operate one domain's private Busy connector.")
     parser.add_argument(
-        "action", choices=["sync"], help="process pending disconnects and synchronize active pairs"
+        "action", choices=["setup", "sync"], help="set up Microsoft registration or synchronize active pairs"
     )
-    parser.parse_args()
+    args = parser.parse_args()
     try:
+        if args.action == "setup":
+            if not sys.stdin.isatty():
+                raise SyncError("Connector setup needs an interactive administrator terminal.")
+            setup_microsoft_connector()
+            return 0
         count = synchronize(Config.load())
+    except (EOFError, KeyboardInterrupt):
+        print("Interrupted. If registration had started, inspect Entra before retrying.", file=sys.stderr)
+        return 1
     except (SyncError, sqlite3.Error, OSError) as exc:
         print(str(exc) if isinstance(exc, SyncError) else "Connector storage unavailable.", file=sys.stderr)
         return 1
