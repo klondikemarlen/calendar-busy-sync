@@ -29,12 +29,51 @@ Each connector reads enough local event data to exclude the copies it created. S
 ## Operator setup for a pilot
 
 1. Provision two **separate** service identities, HTTPS origins, private storage volumes, and operator access boundaries. Do not mount the other node's config, database or backups. Restrict access to the work enrollment page to authorized participants (for example, Entra enterprise application assignment). Use supported commercial Microsoft Graph endpoints. A national-cloud deployment needs a separate assessment; do not substitute hosts or use real government data for testing.
-2. In the agency's Entra directory register a **single-tenant web application** with exact redirect `https://WORK-HOST/callback`. Use authorization-code flow, a server credential, and Microsoft Graph **delegated** `Calendars.ReadWrite`. Do not grant application permissions, enable device sign-in, or collect employee passwords. Allow identity/offline scopes for ongoing per-user access. Keep existing Conditional Access/MFA. Configure assignment/consent per agency policy; an administrator may approve the app once without enrolling mailboxes.
+2. [Register the Microsoft connector](#register-the-microsoft-connector) in the organization's own directory. Keep Conditional Access and MFA in place. Configure assignment and consent under organization policy.
 3. On the Google side enable Google Calendar API and configure an OAuth **web application** with exact redirect `https://GOOGLE-HOST/callback`. Request `openid` and `https://www.googleapis.com/auth/calendar.events.owned`, and offline access. Configure the consent audience and publishing/verification for the intended users. Consumer Google consent is still required. Google Testing-mode refresh grants can expire. Use separate approved test accounts for the pilot.
 4. Install this revision on both nodes under separate unprivileged OS users. Use an operator-supported WSGI server (e.g. Gunicorn installed in the same environment), a TLS reverse proxy, and private encrypted disks/backups. Grants are not encrypted by the application; anyone able to read the service database or its backups is trusted. Do not enable debug mode, request-body/header logging, OAuth debug logging, or proxy/server logging that includes callback query strings. Limit body size (512 KiB), rate-limit requests and restrict `/peer/` at the proxy/firewall to the peer deployment. Set HSTS on the external origin, preserve its Host header, and never expose the plain HTTP backend directly.
 5. Place a JSON configuration file outside the checkout, owned by the service user with mode `0600`. Point `CBS_CONNECTOR_CONFIG` at its full path. The required keys are `role` (`microsoft` or `google`), `origin` (this node's HTTPS origin without a trailing slash), `peer_origin` (the other origin), `client_id`, `client_secret`, `peer_secret`, and `state_dir` (absolute private directory owned by the service user with mode `0700`, or an absent directory with an existing private parent). Microsoft additionally requires `tenant` (the agency's directory UUID); omit it on Google. Configure only the local provider's credential. Generate a 32-byte random URL-safe peer secret, e.g. `python3 -c 'import secrets; print(secrets.token_urlsafe(32))'`, in a private administrative session, and deliver it to the two operators through their secret manager. Never use example keys, log this secret or enter it into the enrollment page.
 6. Example service launch on each node, behind its proxy: `gunicorn --bind 127.0.0.1:8090 --timeout 180 'calendar_busy_sync.connector:application()'`. Set `umask 077` for both the server and worker; disable access logging and use a private service environment. Use local SQLite on one host per node; do not share it across replicas. A simultaneous operation may receive a temporary busy response rather than racing a sync or revocation. The origin, peer origin, role, tenant and client ID are bound to that database. Protect both backups from unauthorized rollback or replay; do not restore one side of a disconnected pairing as an active production enrollment.
 7. After the enrolled pilot users explicitly agree, run `python -m calendar_busy_sync.connector sync` as the service user with the same configuration on each node. Microsoft initiates all calendar exchanges. Google processes deferred disconnects only in its scheduled invocation. Run periodically with your approved scheduler (for example every 15 minutes); installation enables nothing. No eligible pairs means no calendar calls. An error does not authorize sending an empty snapshot. Use bounded WSGI/proxy timeouts suitable for your calendars and monitor worker exit status without logging account data.
+
+## Register the Microsoft connector
+
+Use Bash and Azure CLI as an operator authorized to register apps in the intended commercial Microsoft 365 tenant. This recipe is for the server connector, not the desktop CLI's public-client registration. It needs an existing Entra directory and an HTTPS connector origin, not an Azure compute subscription.
+
+In a fresh Bash shell, enter the directory ID and the actual connector origin (no trailing slash). Check the active directory **before** creating anything:
+
+```bash
+set -eu
+read -rp 'Organization tenant UUID: ' tenant
+read -rp 'Microsoft connector origin (https://hostname): ' origin
+[[ "$origin" =~ ^https://[a-zA-Z0-9.-]+(:[0-9]+)?$ ]] || exit 1
+az login --tenant "$tenant" --allow-no-subscriptions --output none
+[[ "$(az account show --query tenantId -o tsv)" == "$tenant" ]] || exit 1
+```
+
+Create the web registration **once**. Record the printed public client ID. If interrupted, inspect **Entra → App registrations** and resume with the confirmed ID; running `app create` again can create a duplicate with the same name.
+
+```bash
+app_id=$(az ad app create --display-name 'Calendar Busy Sync' \
+  --sign-in-audience AzureADMyOrg --web-redirect-uris "$origin/callback" \
+  --query appId -o tsv)
+printf 'Client ID: %s\n' "$app_id"
+```
+
+Declare Microsoft Graph **delegated** `Calendars.ReadWrite` (`Scope`, not `Role`), then create the tenant's Enterprise application. These commands do **not** grant admin consent. If resuming, inspect the registration and Enterprise application first; run only missing steps.
+
+```bash
+az ad app permission add --id "$app_id" \
+  --api 00000003-0000-0000-c000-000000000000 \
+  --api-permissions 1ec239c2-d7c9-4623-a91a-a9775856bb36=Scope
+az ad sp create --id "$app_id" --output none
+az ad app show --id "$app_id" \
+  --query '{audience:signInAudience,callbacks:web.redirectUris,permissions:requiredResourceAccess}'
+```
+
+Verify `AzureADMyOrg`, the exact HTTPS `/callback` URL, and only the Graph scope above. In **App registrations → your app → Certificates & secrets**, create an expiring client secret. Store its **value**, not its ID, as `client_secret` in the protected connector configuration alongside `tenant` and `client_id` from above. Keep it out of tickets, shell history and source control; assign an owner to rotate it before expiry. Review consent under local policy. Registering the app neither enrolls users nor starts synchronization.
+
+**Distribution decision:** We chose one organization-owned registration per deployment over a shared publisher registration or Entra Gallery listing. A publisher tenant, verification and cross-tenant onboarding would add ongoing maintenance and support for the project without eliminating customer approval or deployment. This is an operating-cost decision, not a claim that Microsoft charges a listing fee or requires Azure hosting. Each organization instead pays the setup cost once and owns credential rotation and revocation. The [shared desktop identity proposal](https://github.com/klondikemarlen/calendar-busy-sync/issues/46) is not planned.
 
 ## Approval, testing and disconnect
 

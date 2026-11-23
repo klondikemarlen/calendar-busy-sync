@@ -9,8 +9,7 @@ For an organization-managed deployment instead of storing both grants on an empl
 ## OAuth administration
 
 - **Google (maintainers):** [Open the Calendar Busy Sync project in Google Auth Platform](https://console.cloud.google.com/auth/overview?project=calendar-busy-sync-d8462f13) to manage OAuth branding, audience, clients, and verification. Access requires a Google account with permission to that project. This is not the calendar sign-in link for users.
-- **Microsoft (operators):** Open **App registrations** in the [Microsoft Entra admin center](https://entra.microsoft.com/). For the [self-hosted connector](docs/connectors.md#operator-setup-for-a-pilot), register a single-tenant web app in the organization's own directory and keep its credential there.
-- **Microsoft (cross-company distribution):** To offer one project-owned app identity, the publisher would register a [multitenant app](https://learn.microsoft.com/en-us/entra/identity-platform/single-and-multi-tenant-apps). Consent creates an [Enterprise application in each customer tenant](https://learn.microsoft.com/en-us/entra/identity-platform/app-objects-and-service-principals); IT can restrict or revoke it. Consent does not deploy the connector or enroll calendars. A shared registration for desktop sign-in is tracked separately in [#46](https://github.com/klondikemarlen/calendar-busy-sync/issues/46).
+- **Microsoft (operators):** Follow the [Azure CLI registration recipe](docs/connectors.md#register-the-microsoft-connector) once per organization. Your organization owns the registration and credential; no project-owned tenant or Gallery listing is required.
 
 ## Install and Use
 
