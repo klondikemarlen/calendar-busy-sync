@@ -3,14 +3,24 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import uuid
 from collections.abc import Callable
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 from .models import SyncError
 from .settings import Paths
 from .setup_tools import SetupTool, temporary_cli
+
+_CALENDAR_ACCESS = json.dumps(
+    [
+        {
+            "resourceAppId": "00000003-0000-0000-c000-000000000000",
+            "resourceAccess": [{"id": "1ec239c2-d7c9-4623-a91a-a9775856bb36", "type": "Scope"}],
+        }
+    ]
+)
 
 
 def _run(tool: SetupTool, args: list[str], *, interactive: bool = False) -> subprocess.CompletedProcess[str]:
@@ -111,12 +121,6 @@ def create_microsoft(
             f"Create a single-tenant public-client app named Calendar Busy Sync in tenant {resolved_tenant}, declaring only delegated Calendars.ReadWrite? No secret or tenant-wide consent will be created."
         ):
             return None
-        access = [
-            {
-                "resourceAppId": "00000003-0000-0000-c000-000000000000",
-                "resourceAccess": [{"id": "1ec239c2-d7c9-4623-a91a-a9775856bb36", "type": "Scope"}],
-            }
-        ]
         try:
             result = _run(
                 tool,
@@ -131,7 +135,7 @@ def create_microsoft(
                     "--is-fallback-public-client",
                     "true",
                     "--required-resource-access",
-                    json.dumps(access),
+                    _CALENDAR_ACCESS,
                     "--query",
                     "appId",
                     "--output",
@@ -148,3 +152,73 @@ def create_microsoft(
         )
     print("Temporary Azure administration files have been removed; application consent is still separate.")
     return app_id, resolved_tenant
+
+
+def setup_microsoft_connector():
+    def confirm(message):
+        return input(f"{message} [y/N] ").strip().lower() in {"y", "yes"}
+
+    print("Microsoft connector registration is an administrator task, not employee calendar sign-in.")
+    if not confirm("Are you authorized to create a new app registration in the organization's tenant?"):
+        print("Use an existing approved connector registration, or ask an admin to run this setup.")
+        print("Give the admin the HTTPS origin. Employees enroll after deployment.")
+        return
+
+    try:
+        tenant = str(uuid.UUID(input("Organization tenant UUID: ").strip()))
+        origin = input("Microsoft connector HTTPS origin (no path): ").strip().rstrip("/")
+        if not re.fullmatch(r"https://[a-zA-Z0-9.-]+(?::[0-9]+)?", origin) or urlsplit(origin).port == 0:
+            raise ValueError
+    except ValueError:
+        raise SyncError("Invalid tenant UUID or HTTPS origin; no app was created.") from None
+
+    callback = f"{origin}/callback"
+    with temporary_cli("az", confirm) as tool:
+        if tool is None:
+            print("No registration created. An admin can use the manual recipe in docs/connectors.md.")
+            return
+        login = ["login", "--tenant", tenant, "--allow-no-subscriptions", "--output", "none"]
+        _run(tool, login, interactive=True)
+        active = _run(tool, ["account", "show", "--query", "tenantId", "--output", "tsv"])
+        if active.stdout.strip().lower() != tenant:
+            raise SyncError("Azure CLI selected a different tenant; no app was created.")
+        if not confirm(
+            f"Create a single-tenant web app and Enterprise application in {tenant} with callback {callback} "
+            "and delegated Calendars.ReadWrite? This does not grant admin consent or enroll users."
+        ):
+            print("Cancelled before creating the registration.")
+            return
+        try:
+            args = [
+                "ad",
+                "app",
+                "create",
+                "--display-name",
+                "Calendar Busy Sync",
+                "--sign-in-audience",
+                "AzureADMyOrg",
+                "--web-redirect-uris",
+                callback,
+                "--required-resource-access",
+                _CALENDAR_ACCESS,
+                "--query",
+                "appId",
+                "--output",
+                "tsv",
+            ]
+            result = _run(tool, args)
+            app_id = str(uuid.UUID(result.stdout.strip()))
+        except (SyncError, ValueError):
+            raise SyncError(
+                "Creation was not confirmed. Inspect Entra App registrations before retrying."
+            ) from None
+        print(f"Keep this registration: tenant={tenant} client_id={app_id}", flush=True)
+        try:
+            _run(tool, ["ad", "sp", "create", "--id", app_id, "--output", "none"])
+        except SyncError:
+            raise SyncError(
+                "Enterprise application creation was not confirmed. Keep the client ID above; "
+                "inspect the Enterprise application and resume the manual recipe. Do not recreate the app."
+            ) from None
+    print("Create an expiring secret in Entra → App registrations → Certificates & secrets.")
+    print("Give the value privately to the connector operator, not employees. No calendar was enrolled.")
