@@ -1,6 +1,5 @@
 """Opt-in two-domain calendar connectors. No provider grant leaves its owner."""
 
-import argparse
 import hmac
 import json
 import re
@@ -148,14 +147,9 @@ def application():
     return handle
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Operate one domain's private Busy connector.")
-    parser.add_argument(
-        "action", choices=["setup", "sync"], help="set up Microsoft registration or synchronize active pairs"
-    )
-    args = parser.parse_args()
+def run_command(action: str) -> int:
     try:
-        if args.action == "setup":
+        if action == "setup":
             if not sys.stdin.isatty():
                 raise SyncError("Connector setup needs an interactive administrator terminal.")
             setup_microsoft_connector()
@@ -169,7 +163,3 @@ def main():
         return 1
     print(f"Completed. Calendar pairs synchronized: {count}.")
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

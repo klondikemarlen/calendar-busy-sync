@@ -305,6 +305,10 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"calendar-busy-sync {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("setup", help="configure accounts interactively")
+    connector = sub.add_parser("connector", help="operate a private calendar connector")
+    actions = connector.add_subparsers(dest="connector_action", required=True)
+    actions.add_parser("setup", help="register the Microsoft connector as an administrator")
+    actions.add_parser("sync", help="process disconnects and synchronize active calendar pairs")
     config = sub.add_parser("config", help="inspect or change sync settings without repeating setup")
     config.set_defaults(config_action=None)
     config_sub = config.add_subparsers(dest="config_action")
@@ -332,6 +336,10 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
+    if args.command == "connector":
+        from .connector import run_command
+
+        return run_command(args.connector_action)
     paths = _paths()
     try:
         if args.command == "setup":
