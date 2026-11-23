@@ -9,7 +9,7 @@ For an organization-managed deployment instead of storing both grants on an empl
 ## OAuth administration
 
 - **Google (maintainers):** [Open the Calendar Busy Sync project in Google Auth Platform](https://console.cloud.google.com/auth/overview?project=calendar-busy-sync-d8462f13) to manage OAuth branding, audience, clients, and verification. Access requires a Google account with permission to that project. This is not the calendar sign-in link for users.
-- **Microsoft (operators):** Run `python -m calendar_busy_sync.connector setup` once per organization. See [connector registration](docs/connectors.md#register-the-microsoft-connector) for separate-admin handoff and the manual alternative. Employees do not need Azure CLI.
+- **Microsoft (operators):** Run `calendar-busy-sync connector setup` once per organization. See [connector registration](docs/connectors.md#register-the-microsoft-connector) for separate-admin handoff and the manual alternative. Employees do not need Azure CLI.
 
 ## Install and Use
 
