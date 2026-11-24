@@ -1,3 +1,4 @@
+import hashlib
 import io
 import json
 import tempfile
@@ -9,7 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from calendar_busy_sync import cli, engine, settings, state
-from calendar_busy_sync.models import Event
+from calendar_busy_sync.models import Event, SyncError
 from calendar_busy_sync.timing import TimingPolicy
 
 
@@ -42,6 +43,77 @@ class ConfigTests(unittest.TestCase):
     def test_setting_padding_preserves_accounts_and_identity(self):
         self.run_config("set", "google-lead-minutes", "60")
         self.assertEqual(settings.load_settings(self.paths), replace(self.current, google_lead_minutes=60))
+
+    def test_legacy_graph_configuration_preserves_a_successful_checkpoint(self):
+        legacy = json.loads(self.paths.config_file.read_text())
+        for new_key in (
+            "outlook_backend",
+            "outlook_web_source_calendar",
+            "outlook_web_mirror_calendar",
+            "outlook_web_timezone",
+        ):
+            del legacy[new_key]
+        self.paths.config_file.write_text(json.dumps(legacy))
+        legacy_fingerprint = hashlib.sha256(json.dumps(legacy, sort_keys=True).encode()).hexdigest()
+        with state.State(self.paths) as store:
+            store.connection.execute(
+                "UPDATE metadata SET value = ? WHERE key = 'configuration'", (legacy_fingerprint,)
+            )
+            store.connection.commit()
+        configured = settings.load_settings(self.paths)
+        self.assertEqual(configured.outlook_backend, "graph")
+        self.assertTrue(state.has_success(self.paths, configured))
+
+    def test_web_requires_distinct_exact_calendar_names_and_the_display_timezone(self):
+        configured = settings.Settings(
+            outlook_backend="web",
+            outlook_web_source_calendar="Work",
+            outlook_web_mirror_calendar="Busy Sync",
+            outlook_web_timezone="America/Phoenix",
+        )
+        settings.save_settings(self.paths, configured)
+        self.assertEqual(settings.load_settings(self.paths), configured)
+        for overrides in (
+            {"outlook_web_source_calendar": ""},
+            {"outlook_web_mirror_calendar": "work"},
+            {"outlook_web_mirror_calendar": "Busy\nSync"},
+            {"outlook_web_timezone": ""},
+            {"outlook_web_timezone": "not-a-timezone"},
+            {"outlook_backend": "fallback"},
+        ):
+            with self.subTest(overrides=overrides), self.assertRaises(SyncError):
+                replace(configured, **overrides).validate()
+
+    def test_graph_mapping_cannot_be_reconciled_against_a_web_pair(self):
+        with state.State(self.paths) as store:
+            store.remember(state.Mapping("google", "original", "outlook", "copy", "fixture"))
+        configured = replace(
+            self.current,
+            outlook_backend="web",
+            outlook_web_source_calendar="Work",
+            outlook_web_mirror_calendar="Busy Sync",
+            outlook_web_timezone="UTC",
+        )
+        settings.save_settings(self.paths, configured)
+        error = io.StringIO()
+        with redirect_stderr(error), patch("calendar_busy_sync.auth._google_client") as google:
+            self.assertEqual(cli.main(["doctor"]), 2)
+        google.assert_not_called()
+
+    def test_bound_web_pair_cannot_be_replaced_without_separate_state(self):
+        configured = replace(
+            self.current,
+            outlook_backend="web",
+            outlook_web_source_calendar="Work",
+            outlook_web_mirror_calendar="Busy Sync",
+            outlook_web_timezone="UTC",
+        )
+        state.check_outlook_pair(self.paths, configured, bind=True)
+        self.paths.outlook_web_identity_file.write_text('{"fixture": true}')
+        state.check_outlook_pair(self.paths, replace(configured, outlook_web_timezone="America/Phoenix"))
+        renamed = replace(configured, outlook_web_mirror_calendar="A different mirror")
+        with self.assertRaises(SyncError):
+            state.check_outlook_pair(self.paths, renamed)
 
     def test_changed_configuration_requires_a_new_successful_sync(self):
         self.run_config("set", "google-lead-minutes", "60")

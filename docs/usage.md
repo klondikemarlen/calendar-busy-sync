@@ -10,7 +10,7 @@ For development, run `make dev`, then `.venv/bin/calendar-busy-sync --help`. The
 
 ## Create Your Own OAuth Applications
 
-No shared application credentials are bundled. Both registrations are free; your organization still controls whether its account can consent.
+No shared application credentials are bundled. Google requires a Desktop app registration; the default Outlook backend uses a Microsoft Graph public-client registration. Both registrations are free; your organization still controls whether its account can consent.
 
 ### Optional Registration Tools
 
@@ -41,7 +41,7 @@ Google's [documented Desktop client registration](https://developers.google.com/
 
 After supplying the downloaded client JSON to `calendar-busy-sync setup`, `calendar-busy-sync auth google` opens the browser consent flow and stores refreshable credentials privately. No CLI administration token is reused as a calendar-access token. Refresh remains subject to the Testing-mode expiry and revocation rules above.
 
-### Microsoft
+### Microsoft Graph (Default)
 
 1. Ask your organization's administrator whether a locally run public-client app may access your own calendar through Microsoft Graph. Register an application in [Microsoft Entra](https://entra.microsoft.com/) or obtain the approved application ID from your administrator.
 2. Use a public-client application with **Allow public client flows** enabled for device sign-in. Do not create an application client secret.
@@ -54,13 +54,30 @@ The guided Microsoft helper signs into your tenant using isolated Azure CLI conf
 
 ## Guided Setup
 
-Run `calendar-busy-sync setup` in a terminal. Supply an existing Google desktop-client JSON and approved Microsoft client ID/tenant, or leave the corresponding entry blank for the optional just-in-time registration guide described above. Existing account details are offered for reuse. The wizard preserves the installation identity on reconfiguration; a corrupt existing configuration must be repaired without inventing a new identity.
+Run `calendar-busy-sync setup` in a terminal. For the default Graph backend, supply an existing Google desktop-client JSON and approved Microsoft client ID/tenant, or leave the corresponding entry blank for the optional just-in-time registration guide described above. For web mode, follow the separate Outlook steps below. Existing account details are offered for reuse. The wizard preserves the installation identity on reconfiguration; a corrupt existing configuration must be repaired without inventing a new identity.
 
-Press Enter to accept the recommended **both** direction: Google appointments become private Busy blocks in Outlook, and Outlook appointments become private Busy blocks in Google. Setup recommends this even when reconfiguring a one-way installation; explicitly enter `google-to-outlook` to keep one-way copying. Loading saved configuration or installing an upgrade never changes the saved direction.
+Press Enter to accept the recommended **both** direction: Google appointments become Busy blocks in Outlook, and Outlook appointments become Busy blocks in Google. Setup recommends this even when reconfiguring a one-way installation; explicitly enter `google-to-outlook` to keep one-way copying. Loading saved configuration or installing an upgrade never changes the saved direction.
 
 Authorization, the read-only connectivity check, and the initial synchronization default to **yes**. Browser consent still needs your approval, including Google calendar write permission for bidirectional copying. Reauthorize when changing direction so the grant matches the selected mode. Optional work-hour and padding customization defaults to **no**, preserving existing choices. Skipped steps print recovery commands; saving configuration alone does not mean syncing is ready.
 
 The initial synchronization prompt explicitly warns that it writes owned Busy copies. Recurring scheduling remains a separate **no-by-default** choice, offered only after a successful sync. Setup asks before disabling an existing schedule for reconfiguration; accepting that prompt stops automatic syncing until you opt back in. Installation alone never authorizes accounts, changes calendar events, or enables scheduling.
+
+### Opt-In Outlook Web Compatibility Mode
+
+Use this mode only if your organization permits it and you want to manage Outlook availability through Outlook on the web. Microsoft Graph remains the default; an authorization failure never triggers automatic fallback. The Google setup and permission requirements are the same in either mode. The separate organization-managed connector does not use this backend.
+
+1. Install [Firefox and geckodriver](packaging.md#outlook-web-runtime). In Outlook on the web, create an empty, uniquely named secondary calendar such as `Busy Sync`. Keep it separate from your work source and primary calendar; this tool does not create the mirror for you. Check the timezone Outlook uses to display its calendar.
+2. Run `calendar-busy-sync setup --outlook-backend web`. Accept the mirror ownership rules and supply the exact source and mirror names and the matching IANA display timezone (for example `America/Phoenix`). This is separate from the optional work-hours timezone. Setup does not require a Microsoft public-client ID or tenant for this mode.
+3. When prompted, sign in to the intended work account in the dedicated Firefox window and complete any Microsoft prompts yourself. The first authorization creates one generic Free, Private identity appointment in the mirror; keep it so the tool can recognize the same calendar later. Sign-in is saved in `outlook-web-profile` inside the local state directory. This is not your daily browser profile; protect it as a credential. The read-only check and sync launch Firefox headlessly. If the session expires, run `calendar-busy-sync auth outlook` in a terminal and sign back into the same account.
+4. Review `calendar-busy-sync sync --dry-run` before applying changes if you decline setup's initial sync. Keep scheduling off until a sync completes without deferred copies. If Outlook changes its calendar UI or the run cannot confirm a complete view, do not treat absent entries as cancelled. Use the reported error to restore the supported view or authorization before retrying.
+
+The source and primary Outlook calendars are never destinations in web mode. On the dedicated mirror, an event named exactly `Busy (from sync)` with this installation's correctly formatted managed note may be updated or removed, including a matching event you duplicated manually. Do not use that mirror for other appointments or add attendees to managed Busy copies. Web notes identify the event as a managed availability copy, advise editing the original, and include an opaque reference instead of source titles, participants or account identifiers. A separate mirror calendar may not affect coworkers' free/busy views; verify that outcome separately before relying on it.
+
+Web mode reads Outlook's English seven-day Week view. A settled grid can miss an appointment until a later run; absence from the grid is not a cancellation. A source event that Outlook cannot reopen by ID leaves its copy in place. For a reschedule, the tool verifies a new block at the requested time before removing the old one. Do not rely on second-level timing, ambiguous daylight-saving times, or localized Outlook labels in this mode.
+
+Reopening `setup` without a backend argument keeps the saved backend. `setup --outlook-backend graph` selects Graph if no web mirror identity or tracked copies would be displaced. After a mirror is bound or copies are tracked, changing backend or web calendars is refused. If you need a new configuration, review the old copies first, disable its schedule, and use separate private `XDG_CONFIG_HOME` and `XDG_STATE_HOME` roots. Do not discard the old database or identity file to bypass this check.
+
+### Routine Commands
 
 Alternatively, after configuration:
 
@@ -72,9 +89,9 @@ calendar-busy-sync sync
 calendar-busy-sync status
 ```
 
-`doctor` prints separate Google and Outlook read-only success lines after both calendars have been read, followed by their event counts for the next 24 hours. These are counts, not error codes: zero means no events were returned in that window, not a connection failure. The probe does not use the full configured sync horizon and never writes calendar events. Setup uses the same report for its optional connectivity check. If either read fails, the command reports an error instead of success.
+`doctor` prints read-only success lines for every configured calendar, including the dedicated Outlook mirror in web mode, followed by their event counts for the next 24 hours. These are counts, not error codes: zero means no events were returned in that window, not a connection failure. The probe does not use the full configured sync horizon and never writes calendar events. Setup uses the same report for its optional connectivity check. If any read fails, the command reports an error instead of success.
 
-A dry run previews operation counts, not private details, and does not satisfy the scheduling gate. A manual sync prints created/updated/deleted/unchanged counts. Nonzero exit status means the run did not finish successfully; scheduled runs never open an interactive sign-in prompt. Reauthorize explicitly with `calendar-busy-sync auth google` or `calendar-busy-sync auth outlook` when instructed.
+A dry run previews operation counts, not private details, and does not satisfy the scheduling gate. A manual sync prints created/updated/deleted/unchanged counts. If an individual copy's cleanup cannot be confirmed, the run reports it as `deferred`, preserves that copy and exits nonzero even if other copies were reconciled. Scheduled runs never open an interactive sign-in prompt. Reauthorize explicitly with `calendar-busy-sync auth google` or `calendar-busy-sync auth outlook` when instructed.
 
 ## Change Settings Without Repeating Setup
 
@@ -196,6 +213,8 @@ Set `cbs` to the installed executable you actually use: `calendar-busy-sync` for
 
 Do not run setup, authorization, or manual sync while backing up. Disabling scheduling does not terminate a running sync; if it or lock acquisition reports contention, let the current operation finish and retry with a new backup directory. Any failure leaves the backup incomplete: use only a directory with `COMPLETE`. The lock keeps configuration, token files, and SQLite ownership records from changing during the copy. Both directories are needed: `config/` includes `config.json` (with `installation_id`) and `google-client.json`; `state/` includes provider tokens and `sync.sqlite3`.
 
+For web mode, the state backup also contains the dedicated Firefox profile and `outlook-web-identity.json` binding. Treat the profile like a token cache: it can contain cookies, session data and browser-cached Outlook data. A restored session might still need interactive sign-in on the new machine. Do not create a replacement binding if the original identity file or appointment is missing; recover the original identity before resuming sync.
+
 The backup contains credentials and private calendar identifiers. Owner-only permissions are **not encryption**. Store it on encrypted backup storage outside Git, restrict access, and never attach it to an issue. Keep a second protected copy off the machine before reinstalling. Save the [public reinstall kit](packaging.md#keep-a-reinstall-kit) too; a backup of a Python virtual environment is not a portable installer.
 
 If you are only making a periodic backup, re-enable your recorded schedule after confirming the backup completed. For a migration, leave the old machine's job disabled and do not run manual sync there after cutover.
@@ -246,7 +265,7 @@ After reviewing the preview, run one successful `calendar-busy-sync sync`. Only 
 
 Configuration is stored under `${XDG_CONFIG_HOME:-~/.config}/calendar-busy-sync`; credentials, SQLite references and lock files are under `${XDG_STATE_HOME:-~/.local/state}/calendar-busy-sync`. Directories are owner-only and credential/state files are private. Never commit or share these files. Preserve the configuration's installation identity and sync database; discarding ownership state can leave anonymous orphan copies that require manual review.
 
-Copies are timed, private Busy appointments without the source title, description, location, attendees, meeting links or reminders. The only description is a fixed origin note: `From personal calendar.` in Outlook or `From work calendar.` in Google. Existing owned copies receive the note once on their next successful sync; later unchanged syncs do not rewrite them. Copies are created without guests or online meetings. Do not add guests to them: the tool refuses to update or delete a guest-bearing copy rather than trigger meeting updates or cancellations. An unrelated calendar overlay is never changed just because its title or time looks similar.
+Copies omit the source title, description, location, attendees, meeting links and reminders. The fixed origin note is `From personal calendar.` in Graph Outlook or `From work calendar.` in Google; the [web mirror](#opt-in-outlook-web-compatibility-mode) uses a managed note with an opaque reference. Existing owned Graph and Google copies receive their origin note once on their next successful sync; later unchanged syncs do not rewrite them. Copies are created without guests or online meetings. Do not add guests to them: the tool refuses to update or delete a guest-bearing copy rather than trigger meeting updates or cancellations. An unrelated calendar overlay is never changed just because its title or time looks similar.
 
 All-day originals become timed blocks spanning their actual local-midnight boundaries; daylight-saving days need not be 24 hours long. Recurring occurrences are expanded by the providers rather than recreated as destination recurrence rules.
 

@@ -11,6 +11,10 @@ class SyncError(Exception):
     """An operator-safe error that contains no provider response or event data."""
 
 
+class EventLookupUnknown(SyncError):
+    """A single event could not be resolved in an otherwise available calendar."""
+
+
 class CopyIdUnavailable(SyncError):
     """A deleted provider resource still reserves this copy generation's ID."""
 

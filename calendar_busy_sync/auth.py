@@ -79,6 +79,15 @@ def authorize_google(settings, paths) -> None:
 
 
 def authorize_outlook(settings, paths) -> None:
+    if settings.outlook_backend == "web":
+        from .outlook_web import open_web_login
+
+        print("Sign in to your Outlook work account in the dedicated Firefox window.", flush=True)
+        print("First sign-in creates a Free, Private identity appointment in the dedicated mirror. Keep it.")
+        with open_web_login(settings, paths) as wait_until_signed_in:
+            wait_until_signed_in()
+        return
+
     try:
         import msal
 
@@ -168,3 +177,17 @@ def _outlook_client(settings, paths):
 
 def build_clients(settings, paths) -> dict:
     return {"google": _google_client(settings, paths), "outlook": _outlook_client(settings, paths)}
+
+
+@contextmanager
+def open_calendar_clients(settings, paths):
+    """Keep an Outlook web session open across reads, planning and mutations."""
+    if settings.outlook_backend == "graph":
+        yield build_clients(settings, paths), None
+        return
+
+    from .outlook_web import open_web_calendars
+
+    google = _google_client(settings, paths)
+    with open_web_calendars(settings, paths) as (source, mirror):
+        yield {"google": google, "outlook": source}, {"outlook": mirror}

@@ -60,7 +60,7 @@ def _read(binary: str) -> tuple[str, bool]:
     raise ScheduleError("Could not read the current crontab; no changes were made.")
 
 
-def _entry(minutes: int, paths: settings.Paths) -> str:
+def _entry(minutes: int, paths: settings.Paths, *, outlook_backend: str) -> str:
     from . import cli
 
     module_file = Path(cli.__file__).resolve()
@@ -76,7 +76,10 @@ def _entry(minutes: int, paths: settings.Paths) -> str:
         f"XDG_CONFIG_HOME={shlex.quote(str(paths.config_dir.parent))} "
         f"XDG_STATE_HOME={shlex.quote(str(paths.state_dir.parent))}"
     )
-    path = os.pathsep.join(dict.fromkeys([str(Path(executable).parent), "/usr/bin", "/bin"]))
+    binary_dirs = [str(Path(executable).parent), "/usr/bin", "/bin"]
+    if outlook_backend == "web":
+        binary_dirs.append("/snap/bin")
+    path = os.pathsep.join(dict.fromkeys(binary_dirs))
     rendered = f"{env} PATH={shlex.quote(path)} {command}".replace("%", r"\%")
     return f"*/{minutes} * * * * {rendered}"
 
@@ -119,7 +122,8 @@ def enable_schedule(*, paths: settings.Paths | None = None, minutes: int = 15) -
             )
         before, _ = _read(binary)
         clean, _ = _owned_lines(before.splitlines())
-        new_text = "\n".join(clean + [_BEGIN, _entry(minutes, paths), _END]) + "\n"
+        command = _entry(minutes, paths, outlook_backend=configured.outlook_backend)
+        new_text = "\n".join(clean + [_BEGIN, command, _END]) + "\n"
         current, _ = _read(binary)
         if current != before:
             raise ScheduleError(

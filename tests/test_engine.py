@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from calendar_busy_sync.engine import sync_lock, synchronize
-from calendar_busy_sync.models import Event, SyncError
+from calendar_busy_sync.models import Event, EventLookupUnknown, SyncError
 from calendar_busy_sync.settings import Paths, Settings, load_settings, save_settings
 from calendar_busy_sync.state import State, has_success
 
@@ -89,6 +89,57 @@ class EngineTests(unittest.TestCase):
         del self.google.events["personal"]
         self.assertEqual(self.sync(), {"created": 0, "updated": 0, "deleted": 1, "unchanged": 0})
         self.assertEqual(self.outlook.events, {"work": original_work})
+
+    def test_unknown_original_preserves_copy_without_blocking_new_appointment(self):
+        self.sync()
+        self.google.events = {"new": event("new", 4)}
+
+        def unknown(event_id):
+            self.assertEqual(event_id, "personal")
+            raise EventLookupUnknown("The calendar could not resolve this item.")
+
+        self.google.get_event = unknown
+        first = self.sync()
+        second = self.sync()
+        self.assertEqual((first["deferred"], second["deferred"]), (1, 1))
+        self.assertEqual((first["created"], second["created"]), (1, 0))
+        self.assertEqual(self.outlook.writes, [("create", "copy-0"), ("create", "copy-1")])
+        with State(self.paths) as state:
+            mappings = {m.source_id: m.target_id for m in state.mappings("google", "outlook")}
+        self.assertEqual(mappings, {"personal": "copy-0", "new": "copy-1"})
+
+    def test_lost_reschedule_response_recovers_new_generation_before_deleting_old(self):
+        self.outlook.replace_for_reschedule = True
+        self.sync()
+        self.google.events["personal"] = event("personal", 4)
+        self.outlook.lose_create_response = True
+        with self.assertRaises(SyncError):
+            self.sync()
+        self.assertEqual(self.outlook.writes, [("create", "copy-0"), ("create", "copy-1")])
+        self.sync()
+        self.assertNotIn("copy-0", self.outlook.events)
+        self.assertEqual(self.outlook.events["copy-1"].start, self.google.events["personal"].start)
+        self.assertEqual(self.sync()["unchanged"], 1)
+
+    def test_uncertain_predelete_lookup_preserves_mapping_for_next_run(self):
+        self.sync()
+        self.google.events.clear()
+        initial_lookup = self.google.get_event
+
+        def uncertain(event_id):
+            raise EventLookupUnknown("The item could not be reopened.")
+
+        def confirmed_once(event_id):
+            self.google.get_event = uncertain
+            return initial_lookup(event_id)
+
+        self.google.get_event = confirmed_once
+        result = self.sync()
+        self.assertEqual((result["deferred"], result["deleted"]), (1, 0))
+        self.assertIn("copy-0", self.outlook.events)
+        self.google.get_event = initial_lookup
+        self.assertEqual(self.sync()["deleted"], 1)
+        self.assertNotIn("copy-0", self.outlook.events)
 
     def test_original_restored_after_planning_preserves_its_copy_and_mapping(self):
         self.sync()

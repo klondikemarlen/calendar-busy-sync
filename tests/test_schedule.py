@@ -5,7 +5,7 @@ from contextlib import nullcontext
 from pathlib import Path
 from unittest.mock import patch
 
-from calendar_busy_sync import schedule
+from calendar_busy_sync import cli, schedule, settings
 
 
 class ScheduleTests(unittest.TestCase):
@@ -29,6 +29,17 @@ class ScheduleTests(unittest.TestCase):
             with self.assertRaises(schedule.ScheduleError):
                 schedule._read("fake-crontab")
 
+    def test_only_web_schedules_include_snap_driver_directory(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            paths = settings.Paths(root / "config", root / "state")
+            with patch.object(cli, "__file__", str(root / "installed.py")):
+                graph = schedule._entry(15, paths, outlook_backend="graph")
+                web = schedule._entry(15, paths, outlook_backend="web")
+            self.assertNotIn("/snap/bin", graph)
+            self.assertIn(":/snap/bin ", web)
+            self.assertIn(f"XDG_STATE_HOME={root}", web)
+
     def test_enable_and_disable_preserve_unrelated_jobs_with_fake_crontab(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -49,7 +60,7 @@ class ScheduleTests(unittest.TestCase):
             paths.config_file = paths.config_dir / "config.json"
             with (
                 patch.dict(os.environ, {"PATH": f"{bin_dir}:/usr/bin:/bin"}),
-                patch("calendar_busy_sync.schedule.settings.load_settings", return_value=object()),
+                patch("calendar_busy_sync.schedule.settings.load_settings", return_value=settings.Settings()),
                 patch("calendar_busy_sync.schedule.state.has_success", return_value=True),
                 patch("calendar_busy_sync.schedule.engine.sync_lock", return_value=nullcontext()),
                 patch("calendar_busy_sync.schedule._entry", return_value="*/15 * * * * /absolute/app sync"),

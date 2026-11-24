@@ -57,6 +57,14 @@ class Paths:
         return self.state_dir / "microsoft-token.json"
 
     @property
+    def outlook_web_profile_dir(self):
+        return self.state_dir / "outlook-web-profile"
+
+    @property
+    def outlook_web_identity_file(self):
+        return self.state_dir / "outlook-web-identity.json"
+
+    @property
     def database_file(self):
         return self.state_dir / "sync.sqlite3"
 
@@ -96,12 +104,31 @@ class Settings:
     google_trail_minutes: int = 0
     outlook_lead_minutes: int = 0
     outlook_trail_minutes: int = 0
+    outlook_backend: str = "graph"
+    outlook_web_source_calendar: str = ""
+    outlook_web_mirror_calendar: str = ""
+    outlook_web_timezone: str = ""
 
-    def validate(self):
-        if self.direction not in ("google-to-outlook", "both"):
-            raise SyncError("Choose google-to-outlook or both as the sync direction.")
-        if not re.fullmatch(r"[0-9a-f]{32}", self.installation_id):
-            raise SyncError("The local installation identity is invalid; restore the original configuration.")
+    def _validate_outlook(self):
+        if self.outlook_backend == "web":
+            source = self.outlook_web_source_calendar
+            mirror = self.outlook_web_mirror_calendar
+            for name in (source, mirror):
+                if not isinstance(name, str) or name != name.strip() or name.splitlines() != [name]:
+                    raise SyncError(
+                        "Enter the exact single-line names of the Outlook source and mirror calendars."
+                    )
+            if source.casefold() == mirror.casefold():
+                raise SyncError("Outlook web sync requires a separate, dedicated mirror calendar.")
+            try:
+                ZoneInfo(self.outlook_web_timezone)
+            except (ZoneInfoNotFoundError, ValueError, TypeError):
+                raise SyncError(
+                    "Use the IANA timezone that matches the Outlook web calendar display."
+                ) from None
+            return
+        if self.outlook_backend != "graph":
+            raise SyncError("Choose graph or web as the Outlook backend.")
         try:
             uuid.UUID(self.microsoft_client_id)
         except (ValueError, TypeError, AttributeError) as error:
@@ -110,6 +137,13 @@ class Settings:
             r"[A-Za-z0-9][A-Za-z0-9.-]{0,252}", self.microsoft_tenant
         ):
             raise SyncError("Use a Microsoft tenant ID/domain or organizations, without a URL.")
+
+    def validate(self):
+        if self.direction not in ("google-to-outlook", "both"):
+            raise SyncError("Choose google-to-outlook or both as the sync direction.")
+        if not re.fullmatch(r"[0-9a-f]{32}", self.installation_id):
+            raise SyncError("The local installation identity is invalid; restore the original configuration.")
+        self._validate_outlook()
         for calendar in (self.google_calendar, self.outlook_calendar):
             if not isinstance(calendar, str) or not calendar.strip() or "\n" in calendar or "\r" in calendar:
                 raise SyncError("Both selected calendar identifiers must be nonempty single-line values.")
