@@ -254,6 +254,11 @@ def synchronize(
                     )
                 )
             elif kind in ("deleted", "duplicate"):
+                if kind == "deleted":
+                    source = clients[mapping.source]
+                    latest = source.get_event(mapping.source_id)
+                    if latest is not None and timing.desired_copy(mapping.source, latest, start, end):
+                        raise SyncError("The original is active again; its Busy copy was not deleted.")
                 client.delete_busy(mapping.target_id, mapping.marker)
             elif kind == "forget":
                 state.forget(mapping)

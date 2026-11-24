@@ -88,6 +88,17 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(self.sync(), {"created": 0, "updated": 0, "deleted": 1, "unchanged": 0})
         self.assertEqual(self.outlook.events, {"work": original_work})
 
+    def test_original_restored_after_planning_preserves_its_copy_and_mapping(self):
+        self.sync()
+        original = self.google.events.pop("personal")
+        reads = iter([None, original])
+        self.google.get_event = lambda event_id: next(reads)
+        with self.assertRaisesRegex(SyncError, "active again"):
+            self.sync()
+        self.assertIn("copy-0", self.outlook.events)
+        with State(self.paths) as state:
+            self.assertEqual(state.mappings("google", "outlook")[0].target_id, "copy-0")
+
     def test_bidirectional_mode_does_not_copy_copies_back(self):
         self.settings.direction = "both"
         self.sync()
