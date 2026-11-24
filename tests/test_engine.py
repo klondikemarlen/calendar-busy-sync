@@ -93,14 +93,16 @@ class EngineTests(unittest.TestCase):
     def test_unknown_original_preserves_copy_without_blocking_new_appointment(self):
         self.sync()
         self.google.events = {"new": event("new", 4)}
+        unresolved_lookups = []
 
         def unknown(event_id):
-            self.assertEqual(event_id, "personal")
+            unresolved_lookups.append(event_id)
             raise EventLookupUnknown("The calendar could not resolve this item.")
 
         self.google.get_event = unknown
         first = self.sync()
         second = self.sync()
+        self.assertEqual(unresolved_lookups, ["personal", "personal"])
         self.assertEqual((first["deferred"], second["deferred"]), (1, 1))
         self.assertEqual((first["created"], second["created"]), (1, 0))
         self.assertEqual(self.outlook.writes, [("create", "copy-0"), ("create", "copy-1")])
