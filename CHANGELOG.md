@@ -7,6 +7,7 @@
 - Separately operated Microsoft and Google connectors can mirror private Busy appointments after individual sign-in and bilateral pairing. No installation-time enrollment, public calendar sharing, or changes to the local CLI.
 - Each connector can restrict the busy time it sends to selected local days and hours. Optional appointment padding is clipped at the window boundaries before anything is sent. The two directions are independent.
 - `calendar-busy-sync connector setup` can guide an authorized administrator through Microsoft web app registration without requiring them to type Azure CLI commands or enroll an employee.
+- Opt in to Outlook web compatibility mode for local Busy-only sync to a dedicated mirror calendar using an isolated Firefox profile. Microsoft Graph remains the default and does not fall back automatically.
 
 ## [2.0.0](https://github.com/klondikemarlen/calendar-busy-sync/releases/tag/v2.0.0) - 2026-11-16
 

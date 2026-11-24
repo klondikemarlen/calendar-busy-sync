@@ -67,6 +67,12 @@ Prerequisites for these download commands are `curl` and GNU `sha256sum`. Stop i
 
 Use the full `~/.local/share/calendar-busy-sync/venv/bin/calendar-busy-sync` path for subsequent commands, or deliberately add that `bin` directory to your shell's `PATH`. If a system package is also installed, do not accidentally invoke its CLI when rebuilding the wheel installation's schedule. Installation does not authorize accounts or enable a job. A new user continues with [setup](usage.md#guided-setup); an existing user should [restore their backup](usage.md#backup-and-reinstall) **before** running setup.
 
+### Outlook Web Runtime
+
+Only [Outlook web compatibility mode](usage.md#opt-in-outlook-web-compatibility-mode) needs Firefox and a compatible `geckodriver` (0.36 or newer recommended). Obtain both from a trusted source and follow [Mozilla's driver compatibility notes](https://firefox-source-docs.mozilla.org/testing/geckodriver/Support.html). The Debian package suggests Firefox but does not install a separate browser driver; the Python wheel does not bundle a browser, a driver or Selenium. Graph and Google API sync do not need these browser tools.
+
+Put `geckodriver` on `PATH`. For scheduling, use an executable on the managed cron job's search path: `/usr/bin`, `/bin`, the installed Python executable's directory, or `/snap/bin` in web mode. A confined browser needs a driver from the same environment and a private profile directory accessible to both. With Ubuntu's Firefox Snap, use its bundled `geckodriver` and set `XDG_STATE_HOME` before setup to a private path under `$HOME/snap/firefox/common`, such as `$HOME/snap/firefox/common/calendar-busy-sync-state`. Use the same state root for all commands; the managed schedule records it. Test manual sync before opting into scheduled use.
+
 ### Keep a Reinstall Kit
 
 Keep the downloaded wheel, checksum manifest, release source archive, these instructions, and the output of the following beside your private backup. The release files are public; the [configuration and token backup](usage.md#backup-and-reinstall) is not.

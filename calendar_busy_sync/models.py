@@ -11,6 +11,10 @@ class SyncError(Exception):
     """An operator-safe error that contains no provider response or event data."""
 
 
+class EventLookupUnknown(SyncError):
+    """A single event could not be resolved in an otherwise available calendar."""
+
+
 class CopyIdUnavailable(SyncError):
     """A deleted provider resource still reserves this copy generation's ID."""
 
@@ -37,6 +41,8 @@ class Event:
 
 
 class CalendarClient(Protocol):
+    idempotent_create: bool
+
     def list_events(self, start: datetime, end: datetime) -> list[Event]: ...
 
     def get_event(self, event_id: str) -> Event | None: ...

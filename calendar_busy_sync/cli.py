@@ -101,14 +101,65 @@ def _doctor(paths: settings.Paths) -> None:
     counts = engine.doctor(settings.load_settings(paths), paths)
     print("Google calendar reads: OK (read-only).")
     print("Outlook calendar reads: OK (read-only).")
+    if "outlook_mirror" in counts:
+        print("Outlook mirror calendar reads: OK (read-only).")
     print("Event counts returned for the next 24 hours:")
     print(f"  Google: {counts['google']}")
     print(f"  Outlook: {counts['outlook']}")
+    if "outlook_mirror" in counts:
+        print(f"  Outlook mirror: {counts['outlook_mirror']}")
     print("A count of 0 means no events in that window, not a connection failure.")
     print("No calendar events were changed.")
 
 
-def _setup(paths: settings.Paths) -> int:
+def _configure_outlook(paths: settings.Paths, current: settings.Settings) -> settings.Settings:
+    if current.outlook_backend == "web":
+        print("Outlook web sync never writes the source or primary calendar.")
+        print(
+            "Use a dedicated mirror calendar. 'Busy (from sync)' entries with this installation's exact "
+            "managed note, including manual duplicates, may be overwritten or deleted there."
+        )
+        print(
+            "Outlook authorization creates one Free, Private mirror identity appointment. Do not remove it."
+        )
+        if not _yes_no("Accept these Outlook web mirror rules?", default=False):
+            raise models.SyncError("Outlook web setup cancelled; configuration was not changed.")
+        source = _prompt(
+            "Exact Outlook work source calendar name", default=current.outlook_web_source_calendar
+        )
+        mirror = _prompt(
+            "Exact dedicated Outlook mirror calendar name", default=current.outlook_web_mirror_calendar
+        )
+        timezone = _prompt(
+            "IANA timezone matching the Outlook web calendar display (e.g. America/Phoenix)",
+            default=current.outlook_web_timezone,
+        )
+        return replace(
+            current,
+            outlook_web_source_calendar=source,
+            outlook_web_mirror_calendar=mirror,
+            outlook_web_timezone=timezone,
+        )
+
+    ms_id = _prompt(
+        "Microsoft public-client application ID (leave blank for guided registration)",
+        default=current.microsoft_client_id,
+    )
+    created_microsoft = None
+    if not ms_id:
+        if _yes_no("Create a Microsoft public-client registration with CLI assistance?", default=False):
+            created_microsoft = registration.create_microsoft(paths, prompt=_prompt, confirm=_yes_no)
+        if created_microsoft is None:
+            print("Obtain an approved public-client application ID at https://entra.microsoft.com/")
+            ms_id = _prompt("Microsoft public-client application ID")
+    if created_microsoft is not None:
+        ms_id, tenant = created_microsoft
+    else:
+        tenant = _prompt("Microsoft tenant", default=current.microsoft_tenant)
+    return replace(current, microsoft_client_id=ms_id, microsoft_tenant=tenant)
+
+
+def _setup(paths: settings.Paths, *, outlook_backend: str | None = None) -> int:
     if _config_is_scheduled(paths):
         if not _yes_no(
             "A managed schedule is enabled. Disable it before changing configuration?", default=True
@@ -145,28 +196,11 @@ def _setup(paths: settings.Paths) -> int:
             raise ValueError
     except (OSError, ValueError, json.JSONDecodeError):
         raise models.SyncError("Could not read a valid Google Desktop OAuth client JSON file.") from None
-    ms_id = _prompt(
-        "Microsoft public-client application ID (leave blank for guided registration)",
-        default=old.microsoft_client_id if old else "",
-    )
-    created_microsoft = None
-    if not ms_id:
-        if _yes_no("Create a Microsoft public-client registration with CLI assistance?", default=False):
-            created_microsoft = registration.create_microsoft(paths, prompt=_prompt, confirm=_yes_no)
-        if created_microsoft is None:
-            print("Obtain an approved public-client application ID at https://entra.microsoft.com/")
-            ms_id = _prompt("Microsoft public-client application ID")
-    if created_microsoft is not None:
-        ms_id, tenant = created_microsoft
-    else:
-        tenant = _prompt("Microsoft tenant", default=old.microsoft_tenant if old else "organizations")
+    current = replace(old, direction=direction) if old else settings.Settings(direction=direction)
+    if outlook_backend is not None:
+        current.outlook_backend = outlook_backend
+    current = _configure_outlook(paths, current)
     try:
-        current = replace(
-            old or settings.Settings(),
-            direction=direction,
-            microsoft_client_id=ms_id,
-            microsoft_tenant=tenant,
-        )
         try:
             current.days_back = int(_prompt("Sync look-back days (0-365)", default=str(current.days_back)))
             current.days_forward = int(
@@ -189,6 +223,7 @@ def _setup(paths: settings.Paths) -> int:
                 raise models.SyncError(
                     "Configuration changed during setup; restart setup without overwriting it."
                 )
+            state.check_outlook_pair(paths, current)
             paths.ensure()
             settings.private_write(paths.google_client_file, json.dumps(client_data))
             settings.save_settings(paths, current)
@@ -207,7 +242,12 @@ def _setup(paths: settings.Paths) -> int:
     else:
         print("Connectivity not checked. To check later: calendar-busy-sync doctor")
     if _yes_no("Run the initial synchronization now (writes owned Busy copies)?", default=True):
-        print(json.dumps(_run_sync(paths), sort_keys=True))
+        result = _run_sync(paths)
+        print(json.dumps(result, sort_keys=True))
+        if result.get("deferred"):
+            print("Setup incomplete: some copies could not be reconciled safely. Automatic syncing is off.")
+            print("Run calendar-busy-sync sync again before enabling a schedule.")
+            return 2
         print("Initial synchronization succeeded.")
         if _yes_no("Enable a recurring schedule?", default=False):
             enable_schedule(paths=paths)
@@ -225,12 +265,19 @@ def _setup(paths: settings.Paths) -> int:
 def _authorize(provider: str, paths: settings.Paths) -> None:
     with engine.sync_lock(paths):
         configured = settings.load_settings(paths)
+        uses_web = provider in ("outlook", "all") and configured.outlook_backend == "web"
+        if uses_web and not sys.stdin.isatty():
+            raise models.SyncError("Outlook web sign-in requires an interactive terminal and Firefox window.")
+        state.check_outlook_pair(paths, configured, bind=uses_web)
         state.invalidate_success(paths)
         if provider in ("google", "all"):
             auth.authorize_google(configured, paths)
         if provider in ("outlook", "all"):
             auth.authorize_outlook(configured, paths)
-    print("Authorization completed; tokens were stored locally.")
+    if uses_web:
+        print("Authorization completed; Outlook sign-in is stored in the dedicated local Firefox profile.")
+    else:
+        print("Authorization completed; tokens were stored locally.")
 
 
 def _run_sync(paths: settings.Paths, dry_run: bool = False) -> dict:
@@ -304,7 +351,12 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--version", action="version", version=f"calendar-busy-sync {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("setup", help="configure accounts interactively")
+    setup = sub.add_parser("setup", help="configure accounts interactively")
+    setup.add_argument(
+        "--outlook-backend",
+        choices=("graph", "web"),
+        help="choose the Outlook connection (default: saved backend, or graph for a new setup)",
+    )
     connector = sub.add_parser("connector", help="operate a private calendar connector")
     actions = connector.add_subparsers(dest="connector_action", required=True)
     actions.add_parser("setup", help="register the Microsoft connector as an administrator")
@@ -343,7 +395,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     paths = _paths()
     try:
         if args.command == "setup":
-            return _setup(paths)
+            return _setup(paths, outlook_backend=args.outlook_backend)
         if args.command == "auth":
             _authorize(args.provider, paths)
         elif args.command == "config":
@@ -351,6 +403,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "sync":
             result = _run_sync(paths, args.dry_run)
             print(json.dumps(result, sort_keys=True))
+            if result.get("deferred"):
+                print(
+                    "Sync incomplete: some copies could not be reconciled safely. Rerun sync.",
+                    file=sys.stderr,
+                )
+                return 2
         elif args.command == "doctor":
             _doctor(paths)
         elif args.command == "status":
@@ -367,6 +425,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         "configuration_error": configuration_error,
                         "direction": configured.direction if configured else None,
                         "last_success": state.last_success(paths),
+                        "outlook_backend": configured.outlook_backend if configured else None,
                         "sync_health": health.snapshot(paths),
                         "schedule": schedule_status(paths=paths).enabled,
                     },

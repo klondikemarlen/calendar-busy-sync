@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from calendar_busy_sync.engine import sync_lock, synchronize
-from calendar_busy_sync.models import Event, SyncError
+from calendar_busy_sync.models import Event, EventLookupUnknown, SyncError
 from calendar_busy_sync.settings import Paths, Settings, load_settings, save_settings
 from calendar_busy_sync.state import State, has_success
 
@@ -15,18 +15,24 @@ NOW = datetime(2026, 11, 3, 12, tzinfo=UTC)
 
 
 class MemoryCalendar:
+    idempotent_create = False
+
     def __init__(self, events=()):
         self.events = {event.id: event for event in events}
         self.writes = []
+        self.snapshot_reads = 0
+        self.lookups = []
         self.fail_read = False
         self.lose_create_response = False
 
     def list_events(self, start, end):
+        self.snapshot_reads += 1
         if self.fail_read:
             raise SyncError("Calendar snapshot failed.")
         return [event for event in self.events.values() if event.start < end and event.end > start]
 
     def get_event(self, event_id):
+        self.lookups.append(event_id)
         return self.events.get(event_id)
 
     def create_busy(self, event, marker):
@@ -84,6 +90,76 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(self.sync(), {"created": 0, "updated": 0, "deleted": 1, "unchanged": 0})
         self.assertEqual(self.outlook.events, {"work": original_work})
 
+    def test_unknown_original_preserves_copy_without_blocking_new_appointment(self):
+        self.sync()
+        self.google.events = {"new": event("new", 4)}
+        unresolved_lookups = []
+
+        def unknown(event_id):
+            unresolved_lookups.append(event_id)
+            raise EventLookupUnknown("The calendar could not resolve this item.")
+
+        self.google.get_event = unknown
+        first = self.sync()
+        second = self.sync()
+        self.assertEqual(unresolved_lookups, ["personal", "personal"])
+        self.assertEqual((first["deferred"], second["deferred"]), (1, 1))
+        self.assertEqual((first["created"], second["created"]), (1, 0))
+        self.assertEqual(self.outlook.writes, [("create", "copy-0"), ("create", "copy-1")])
+        with State(self.paths) as state:
+            mappings = {m.source_id: m.target_id for m in state.mappings("google", "outlook")}
+        self.assertEqual(
+            mappings,
+            {
+                "personal": "copy-0",
+                "new": "copy-1",
+            },
+        )
+
+    def test_lost_reschedule_response_recovers_new_generation_before_deleting_old(self):
+        self.outlook.replace_for_reschedule = True
+        self.sync()
+        self.google.events["personal"] = event("personal", 4)
+        self.outlook.lose_create_response = True
+        with self.assertRaises(SyncError):
+            self.sync()
+        self.assertEqual(self.outlook.writes, [("create", "copy-0"), ("create", "copy-1")])
+        self.sync()
+        self.assertNotIn("copy-0", self.outlook.events)
+        self.assertEqual(self.outlook.events["copy-1"].start, self.google.events["personal"].start)
+        self.assertEqual(self.sync()["unchanged"], 1)
+
+    def test_uncertain_predelete_lookup_preserves_mapping_for_next_run(self):
+        self.sync()
+        self.google.events.clear()
+        initial_lookup = self.google.get_event
+
+        def uncertain(event_id):
+            raise EventLookupUnknown("The item could not be reopened.")
+
+        def confirmed_once(event_id):
+            self.google.get_event = uncertain
+            return initial_lookup(event_id)
+
+        self.google.get_event = confirmed_once
+        result = self.sync()
+        self.assertEqual((result["deferred"], result["deleted"]), (1, 0))
+        self.assertIn("copy-0", self.outlook.events)
+        self.google.get_event = initial_lookup
+        self.assertEqual(self.sync()["deleted"], 1)
+        self.assertNotIn("copy-0", self.outlook.events)
+
+    def test_original_restored_after_planning_preserves_its_copy_and_mapping(self):
+        self.sync()
+        original = self.google.events.pop("personal")
+        reads = iter([None, original])
+        self.google.get_event = lambda event_id: next(reads)
+        with self.assertRaisesRegex(SyncError, "active again"):
+            self.sync()
+        self.assertIn("copy-0", self.outlook.events)
+        with State(self.paths) as state:
+            self.assertEqual(state.mappings("google", "outlook")[0].target_id, "copy-0")
+
     def test_bidirectional_mode_does_not_copy_copies_back(self):
         self.settings.direction = "both"
         self.sync()
@@ -95,6 +171,115 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(
             [entry for entry in self.outlook.events if not self.outlook.events[entry].marker], ["work"]
         )
+
+    def test_one_way_sync_does_not_read_an_unused_source_view(self):
+        self.outlook.fail_read = True
+        mirror = MemoryCalendar()
+
+        self.assertEqual(
+            self.sync(destination_clients={"outlook": mirror}),
+            {
+                "created": 1,
+                "updated": 0,
+                "deleted": 0,
+                "unchanged": 0,
+            },
+        )
+        self.assertEqual(self.outlook.snapshot_reads, 0)
+        self.assertEqual(self.outlook.writes, [])
+        self.assertEqual(mirror.writes, [("create", "copy-0")])
+
+    def test_distinct_destination_reconciles_only_its_copies_in_both_directions(self):
+        self.settings.direction = "both"
+        original_work = self.outlook.events["work"]
+        primary_collision = replace(event("copy-0", 10), busy=False)
+        self.outlook.events[primary_collision.id] = primary_collision
+        mirror_event = event("work", 8)
+        mirror = MemoryCalendar([mirror_event])
+        destinations = {"outlook": mirror}
+
+        self.assertEqual(
+            self.sync(destination_clients=destinations),
+            {
+                "created": 2,
+                "updated": 0,
+                "deleted": 0,
+                "unchanged": 0,
+            },
+        )
+        self.assertEqual(
+            (self.google.snapshot_reads, self.outlook.snapshot_reads, mirror.snapshot_reads), (1, 1, 1)
+        )
+        self.assertEqual(self.google.events["copy-0"].start, original_work.start)
+        copy = mirror.events["copy-0"]
+        self.assertEqual(copy.start, self.google.events["personal"].start)
+        self.assertEqual(
+            self.sync(destination_clients=destinations),
+            {
+                "created": 0,
+                "updated": 0,
+                "deleted": 0,
+                "unchanged": 2,
+            },
+        )
+
+        out_of_window = event(copy.id, 24 * 800)
+        mirror.events[copy.id] = replace(out_of_window, marker=copy.marker)
+        self.google.events["personal"] = event("personal", 2)
+        self.assertEqual(self.sync(destination_clients=destinations)["updated"], 1)
+        self.assertEqual(mirror.events[copy.id].start, self.google.events["personal"].start)
+
+        mirror.events[copy.id] = replace(out_of_window, marker=copy.marker)
+        del self.google.events["personal"]
+        self.assertEqual(self.sync(destination_clients=destinations)["deleted"], 1)
+        self.assertEqual(mirror.lookups, [copy.id, copy.id])
+        self.assertEqual(mirror.writes, [("create", copy.id), ("update", copy.id), ("delete", copy.id)])
+        self.assertEqual(
+            mirror.events,
+            {
+                "work": mirror_event,
+            },
+        )
+        self.assertEqual(self.outlook.lookups, [])
+        self.assertEqual(self.outlook.writes, [])
+        self.assertEqual(
+            self.outlook.events,
+            {
+                "work": original_work,
+                primary_collision.id: primary_collision,
+            },
+        )
+
+    def test_omitted_active_source_does_not_use_destination_for_confirmation(self):
+        self.settings.direction = "both"
+        mirror = MemoryCalendar()
+        destinations = {"outlook": mirror}
+        self.sync(destination_clients=destinations)
+        self.google.events["personal"] = event("personal", 2)
+        self.outlook.list_events = lambda start, end: []
+
+        with self.assertRaisesRegex(SyncError, "source snapshot omitted an active event"):
+            self.sync(destination_clients=destinations)
+
+        self.assertEqual(self.outlook.lookups, ["work"])
+        self.assertEqual(mirror.lookups, [])
+        self.assertEqual(mirror.writes, [("create", "copy-0")])
+        self.assertEqual(self.google.writes, [("create", "copy-0")])
+        self.assertEqual(self.outlook.writes, [])
+
+    def test_failed_distinct_snapshot_prevents_writes_in_either_direction(self):
+        self.settings.direction = "both"
+        mirror = MemoryCalendar()
+        for role, calendar in (("source", self.outlook), ("destination", mirror)):
+            with self.subTest(role=role):
+                calendar.fail_read = True
+                with self.assertRaisesRegex(SyncError, "snapshot failed"):
+                    self.sync(destination_clients={"outlook": mirror})
+                calendar.fail_read = False
+                self.assertEqual(self.google.writes, [])
+                self.assertEqual(self.outlook.writes, [])
+                self.assertEqual(mirror.writes, [])
+                self.assertFalse(has_success(self.paths, self.settings))
 
     def test_a_failed_snapshot_prevents_all_calendar_mutations(self):
         self.settings.direction = "both"
@@ -113,6 +298,20 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(self.sync(), {"created": 0, "updated": 1, "deleted": 0, "unchanged": 0})
         self.assertEqual(self.outlook.writes, [("create", "copy-0"), ("update", "copy-0")])
         self.assertEqual(self.sync(), {"created": 0, "updated": 0, "deleted": 0, "unchanged": 1})
+
+    def test_lost_save_hidden_by_partial_view_is_not_retried_or_forgotten(self):
+        self.outlook.lose_create_response = True
+        with self.assertRaises(SyncError):
+            self.sync()
+        self.outlook.list_events = lambda start, end: []
+        for cancelled in (False, True):
+            if cancelled:
+                self.google.events.clear()
+            with self.assertRaisesRegex(SyncError, "previous save is unconfirmed"):
+                self.sync()
+            self.assertEqual(self.outlook.writes, [("create", "copy-0")])
+            with State(self.paths) as state:
+                self.assertEqual(state.mappings("google", "outlook")[0].target_id, "")
 
     def test_unowned_replacement_is_never_deleted(self):
         self.sync()
