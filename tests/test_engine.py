@@ -18,15 +18,19 @@ class MemoryCalendar:
     def __init__(self, events=()):
         self.events = {event.id: event for event in events}
         self.writes = []
+        self.snapshot_reads = 0
+        self.lookups = []
         self.fail_read = False
         self.lose_create_response = False
 
     def list_events(self, start, end):
+        self.snapshot_reads += 1
         if self.fail_read:
             raise SyncError("Calendar snapshot failed.")
         return [event for event in self.events.values() if event.start < end and event.end > start]
 
     def get_event(self, event_id):
+        self.lookups.append(event_id)
         return self.events.get(event_id)
 
     def create_busy(self, event, marker):
@@ -95,6 +99,91 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(
             [entry for entry in self.outlook.events if not self.outlook.events[entry].marker], ["work"]
         )
+
+    def test_one_way_sync_does_not_read_an_unused_source_view(self):
+        self.outlook.fail_read = True
+        mirror = MemoryCalendar()
+
+        self.assertEqual(
+            self.sync(destination_clients={"outlook": mirror}),
+            {"created": 1, "updated": 0, "deleted": 0, "unchanged": 0},
+        )
+        self.assertEqual(self.outlook.snapshot_reads, 0)
+        self.assertEqual(self.outlook.writes, [])
+        self.assertEqual(mirror.writes, [("create", "copy-0")])
+
+    def test_distinct_destination_reconciles_only_its_copies_in_both_directions(self):
+        self.settings.direction = "both"
+        original_work = self.outlook.events["work"]
+        primary_collision = replace(event("copy-0", 10), busy=False)
+        self.outlook.events[primary_collision.id] = primary_collision
+        mirror_event = event("work", 8)
+        mirror = MemoryCalendar([mirror_event])
+        destinations = {"outlook": mirror}
+
+        self.assertEqual(
+            self.sync(destination_clients=destinations),
+            {"created": 2, "updated": 0, "deleted": 0, "unchanged": 0},
+        )
+        self.assertEqual(
+            (self.google.snapshot_reads, self.outlook.snapshot_reads, mirror.snapshot_reads), (1, 1, 1)
+        )
+        self.assertEqual(self.google.events["copy-0"].start, original_work.start)
+        copy = mirror.events["copy-0"]
+        self.assertEqual(copy.start, self.google.events["personal"].start)
+        self.assertEqual(
+            self.sync(destination_clients=destinations),
+            {"created": 0, "updated": 0, "deleted": 0, "unchanged": 2},
+        )
+
+        out_of_window = event(copy.id, 24 * 800)
+        mirror.events[copy.id] = replace(out_of_window, marker=copy.marker)
+        self.google.events["personal"] = event("personal", 2)
+        self.assertEqual(self.sync(destination_clients=destinations)["updated"], 1)
+        self.assertEqual(mirror.events[copy.id].start, self.google.events["personal"].start)
+
+        mirror.events[copy.id] = replace(out_of_window, marker=copy.marker)
+        del self.google.events["personal"]
+        self.assertEqual(self.sync(destination_clients=destinations)["deleted"], 1)
+        self.assertEqual(mirror.lookups, [copy.id, copy.id])
+        self.assertEqual(mirror.writes, [("create", copy.id), ("update", copy.id), ("delete", copy.id)])
+        self.assertEqual(mirror.events, {"work": mirror_event})
+        self.assertEqual(self.outlook.lookups, [])
+        self.assertEqual(self.outlook.writes, [])
+        self.assertEqual(
+            self.outlook.events, {"work": original_work, primary_collision.id: primary_collision}
+        )
+
+    def test_omitted_active_source_does_not_use_destination_for_confirmation(self):
+        self.settings.direction = "both"
+        mirror = MemoryCalendar()
+        destinations = {"outlook": mirror}
+        self.sync(destination_clients=destinations)
+        self.google.events["personal"] = event("personal", 2)
+        self.outlook.list_events = lambda start, end: []
+
+        with self.assertRaisesRegex(SyncError, "source snapshot omitted an active event"):
+            self.sync(destination_clients=destinations)
+
+        self.assertEqual(self.outlook.lookups, ["work"])
+        self.assertEqual(mirror.lookups, [])
+        self.assertEqual(mirror.writes, [("create", "copy-0")])
+        self.assertEqual(self.google.writes, [("create", "copy-0")])
+        self.assertEqual(self.outlook.writes, [])
+
+    def test_failed_distinct_snapshot_prevents_writes_in_either_direction(self):
+        self.settings.direction = "both"
+        mirror = MemoryCalendar()
+        for role, calendar in (("source", self.outlook), ("destination", mirror)):
+            with self.subTest(role=role):
+                calendar.fail_read = True
+                with self.assertRaisesRegex(SyncError, "snapshot failed"):
+                    self.sync(destination_clients={"outlook": mirror})
+                calendar.fail_read = False
+                self.assertEqual(self.google.writes, [])
+                self.assertEqual(self.outlook.writes, [])
+                self.assertEqual(mirror.writes, [])
+                self.assertFalse(has_success(self.paths, self.settings))
 
     def test_a_failed_snapshot_prevents_all_calendar_mutations(self):
         self.settings.direction = "both"

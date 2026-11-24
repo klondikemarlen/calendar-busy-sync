@@ -49,6 +49,12 @@ class Operation:
     event: Event | None = None
 
 
+@dataclass(frozen=True)
+class _CalendarSnapshot:
+    client: CalendarClient
+    events: list[Event]
+
+
 def _owned(event: Event | None, marker: str) -> Event | None:
     if event is not None and event.marker != marker:
         raise SyncError("A tracked copy lost its ownership marker; no unrelated event was changed.")
@@ -64,9 +70,19 @@ def _generation_copies(events: list[Event], marker: str) -> list[Event]:
     ]
 
 
-def _plan_direction(settings, state, clients, snapshots, source, target, start, end, timing):
+def _plan_direction(
+    settings: Settings,
+    state: State,
+    source: str,
+    target: str,
+    source_snapshot: _CalendarSnapshot,
+    destination_snapshot: _CalendarSnapshot,
+    start: datetime,
+    end: datetime,
+    timing: TimingPolicy,
+) -> list[Operation]:
     originals = {}
-    for event in snapshots[source]:
+    for event in source_snapshot.events:
         desired = timing.desired_copy(source, event, start, end)
         if desired is not None:
             originals[event.id] = desired
@@ -76,7 +92,7 @@ def _plan_direction(settings, state, clients, snapshots, source, target, start, 
     for source_id, original in originals.items():
         base_marker = _marker(settings, source, source_id)
         mapping = mappings.get(source_id)
-        candidates = _generation_copies(snapshots[target], base_marker)
+        candidates = _generation_copies(destination_snapshot.events, base_marker)
         if mapping and not (mapping.marker == base_marker or mapping.marker.startswith(base_marker + ":")):
             raise SyncError(
                 "The selected calendars changed. Restore the original configuration before reconciling existing copies."
@@ -88,7 +104,7 @@ def _plan_direction(settings, state, clients, snapshots, source, target, start, 
         else:
             marker = f"{base_marker}:{uuid.uuid4().hex}"
         if mapping and mapping.target_id and all(event.id != mapping.target_id for event in candidates):
-            tracked = _owned(clients[target].get_event(mapping.target_id), marker)
+            tracked = _owned(destination_snapshot.client.get_event(mapping.target_id), marker)
             if tracked:
                 candidates.append(tracked)
             elif not candidates:
@@ -120,14 +136,14 @@ def _plan_direction(settings, state, clients, snapshots, source, target, start, 
     for source_id, mapping in mappings.items():
         if source_id in originals:
             continue
-        original = clients[source].get_event(source_id)
+        original = source_snapshot.client.get_event(source_id)
         if original is not None and timing.desired_copy(source, original, start, end) is not None:
             raise SyncError(
                 "The source snapshot omitted an active event. No changes were applied; retry a complete sync."
             )
-        candidates = _generation_copies(snapshots[target], mapping.marker)
+        candidates = _generation_copies(destination_snapshot.events, mapping.marker)
         if mapping.target_id and all(event.id != mapping.target_id for event in candidates):
-            tracked = _owned(clients[target].get_event(mapping.target_id), mapping.marker)
+            tracked = _owned(destination_snapshot.client.get_event(mapping.target_id), mapping.marker)
             if tracked:
                 candidates.append(tracked)
         for candidate in candidates:
@@ -139,30 +155,58 @@ def _plan_direction(settings, state, clients, snapshots, source, target, start, 
 
 
 def synchronize(
-    settings: Settings, paths: Paths, clients: dict[str, CalendarClient], dry_run=False, now=None
+    settings: Settings,
+    paths: Paths,
+    clients: dict[str, CalendarClient],
+    dry_run=False,
+    now=None,
+    *,
+    destination_clients: dict[str, CalendarClient] | None = None,
 ):
+    """Use the source clients for both roles unless a provider has a destination override."""
     settings.validate()
     now = now or datetime.now(UTC)
     start, end = _window(settings, now)
     timing = TimingPolicy(settings)
     query_start, query_end = timing.query_window(start, end)
-    # Both paginated views must complete before planning or writing anything.
-    snapshots = {name: client.list_events(query_start, query_end) for name, client in clients.items()}
-    if set(snapshots) != {"google", "outlook"}:
+    if set(clients) != {"google", "outlook"}:
         raise SyncError("Both calendar connections are required before syncing.")
-    for events in snapshots.values():
-        if len({event.id for event in events}) != len(events):
-            raise SyncError("A calendar returned duplicate event identifiers; sync stopped.")
-    counts = dict.fromkeys(("created", "updated", "deleted", "unchanged"), 0)
+    if destination_clients and destination_clients.keys() - clients.keys():
+        raise SyncError("A destination must match a configured calendar connection.")
+
+    destinations = clients | destination_clients if destination_clients else clients
     directions = [("google", "outlook")]
     if settings.direction == "both":
         directions.append(("outlook", "google"))
+
+    # Complete every active view before planning either direction. Shared clients need only one read.
+    snapshots = {}
+    for source, target in directions:
+        for client in (clients[source], destinations[target]):
+            if id(client) in snapshots:
+                continue
+            events = client.list_events(query_start, query_end)
+            if len({event.id for event in events}) != len(events):
+                raise SyncError("A calendar returned duplicate event identifiers; sync stopped.")
+            snapshots[id(client)] = _CalendarSnapshot(client, events)
+
+    counts = dict.fromkeys(("created", "updated", "deleted", "unchanged"), 0)
 
     with State(paths) as state:
         operations = []
         for source, target in directions:
             operations.extend(
-                _plan_direction(settings, state, clients, snapshots, source, target, start, end, timing)
+                _plan_direction(
+                    settings,
+                    state,
+                    source,
+                    target,
+                    snapshots[id(clients[source])],
+                    snapshots[id(destinations[target])],
+                    start,
+                    end,
+                    timing,
+                )
             )
         for operation in operations:
             kind, mapping, original = operation.kind, operation.mapping, operation.event
@@ -171,7 +215,7 @@ def synchronize(
                 counts[counter] += 1
             if dry_run:
                 continue
-            client = clients[mapping.target]
+            client = destinations[mapping.target]
             if kind == "created":
                 # Persist intent before POST so a process crash can recover its owned copy.
                 state.remember(mapping)
