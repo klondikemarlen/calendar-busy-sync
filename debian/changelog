@@ -1,3 +1,9 @@
+calendar-busy-sync (2.1.0+resolute1) resolute; urgency=medium
+
+  * Add opt-in Outlook web sync and separately operated calendar connectors.
+
+ -- Marlen Brunner <klondikemarlen@gmail.com>  Tue, 24 Nov 2026 23:30:00 +0000
+
 calendar-busy-sync (2.0.0+resolute1) resolute; urgency=medium
 
   * Remove per-event padding; retain directional travel-time settings.

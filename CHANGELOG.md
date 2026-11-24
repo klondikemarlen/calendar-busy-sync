@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [2.1.0](https://github.com/klondikemarlen/calendar-busy-sync/releases/tag/v2.1.0) - 2026-11-24
 
 ### Added
 
