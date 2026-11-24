@@ -15,6 +15,8 @@ NOW = datetime(2026, 11, 3, 12, tzinfo=UTC)
 
 
 class MemoryCalendar:
+    idempotent_create = False
+
     def __init__(self, events=()):
         self.events = {event.id: event for event in events}
         self.writes = []
@@ -213,6 +215,20 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(self.sync(), {"created": 0, "updated": 1, "deleted": 0, "unchanged": 0})
         self.assertEqual(self.outlook.writes, [("create", "copy-0"), ("update", "copy-0")])
         self.assertEqual(self.sync(), {"created": 0, "updated": 0, "deleted": 0, "unchanged": 1})
+
+    def test_lost_save_hidden_by_partial_view_is_not_retried_or_forgotten(self):
+        self.outlook.lose_create_response = True
+        with self.assertRaises(SyncError):
+            self.sync()
+        self.outlook.list_events = lambda start, end: []
+        for cancelled in (False, True):
+            if cancelled:
+                self.google.events.clear()
+            with self.assertRaisesRegex(SyncError, "previous save is unconfirmed"):
+                self.sync()
+            self.assertEqual(self.outlook.writes, [("create", "copy-0")])
+            with State(self.paths) as state:
+                self.assertEqual(state.mappings("google", "outlook")[0].target_id, "")
 
     def test_unowned_replacement_is_never_deleted(self):
         self.sync()

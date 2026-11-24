@@ -70,6 +70,14 @@ def _generation_copies(events: list[Event], marker: str) -> list[Event]:
     ]
 
 
+def _check_pending_create(mapping, candidates, destination):
+    if mapping and not mapping.target_id and not destination.idempotent_create:
+        if not any(event.marker == mapping.marker for event in candidates):
+            raise SyncError(
+                "The previous save is unconfirmed. Its pending record was kept; no retry was sent."
+            )
+
+
 def _plan_direction(
     settings: Settings,
     state: State,
@@ -97,6 +105,7 @@ def _plan_direction(
             raise SyncError(
                 "The selected calendars changed. Restore the original configuration before reconciling existing copies."
             )
+        _check_pending_create(mapping, candidates, destination_snapshot.client)
         if mapping:
             marker = mapping.marker
         elif candidates:
@@ -142,6 +151,7 @@ def _plan_direction(
                 "The source snapshot omitted an active event. No changes were applied; retry a complete sync."
             )
         candidates = _generation_copies(destination_snapshot.events, mapping.marker)
+        _check_pending_create(mapping, candidates, destination_snapshot.client)
         if mapping.target_id and all(event.id != mapping.target_id for event in candidates):
             tracked = _owned(destination_snapshot.client.get_event(mapping.target_id), mapping.marker)
             if tracked:

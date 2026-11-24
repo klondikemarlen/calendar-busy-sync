@@ -37,6 +37,8 @@ class Event:
 
 
 class CalendarClient(Protocol):
+    idempotent_create: bool
+
     def list_events(self, start: datetime, end: datetime) -> list[Event]: ...
 
     def get_event(self, event_id: str) -> Event | None: ...

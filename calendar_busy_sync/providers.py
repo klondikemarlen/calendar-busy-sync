@@ -156,6 +156,8 @@ class _HttpClient:
 
 
 class GoogleCalendarClient(_HttpClient):
+    idempotent_create = True  # Caller-supplied event ID.
+
     def __init__(self, access_token: str, calendar_id: str = "primary", session=None):
         super().__init__(access_token, session)
         self.calendar_id = calendar_id
@@ -310,6 +312,8 @@ class GoogleCalendarClient(_HttpClient):
 
 
 class OutlookCalendarClient(_HttpClient):
+    idempotent_create = True  # Caller-supplied transactionId.
+
     def __init__(self, access_token: str, calendar_id: str = "default", session=None):
         super().__init__(access_token, session)
         self.calendar_id = calendar_id
