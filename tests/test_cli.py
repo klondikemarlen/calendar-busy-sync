@@ -201,15 +201,16 @@ class OutlookWebCliTests(unittest.TestCase):
         self.enterContext(patch("calendar_busy_sync.auth._google_client", return_value=self.google))
         self.enterContext(patch("calendar_busy_sync.health.notify", return_value=False))
         self.graph_client = self.enterContext(patch("calendar_busy_sync.auth._outlook_client"))
-        self.enterContext(
+        self.web_calendars = self.enterContext(
             patch("calendar_busy_sync.outlook_web.open_web_calendars", side_effect=self.open_calendars)
         )
-        self.enterContext(patch("calendar_busy_sync.outlook_web.open_web_login", side_effect=self.open_login))
+        self.web_login = self.enterContext(
+            patch("calendar_busy_sync.outlook_web.open_web_login", side_effect=self.open_login)
+        )
 
     @contextmanager
     def open_login(self, configured, paths):
         self.browser_lifecycle.append("login")
-        self.assertEqual(configured.outlook_backend, "web")
 
         def sign_in():
             paths.outlook_web_identity_file.write_text('{"fixture": true}')
@@ -222,10 +223,6 @@ class OutlookWebCliTests(unittest.TestCase):
 
     @contextmanager
     def open_calendars(self, configured, paths):
-        self.assertEqual(configured.outlook_web_source_calendar, "Work")
-        self.assertEqual(configured.outlook_web_mirror_calendar, "Busy Sync")
-        self.assertEqual(configured.outlook_web_timezone, "UTC")
-        self.assertEqual(paths.outlook_web_profile_dir, self.paths.state_dir / "outlook-web-profile")
         self.browser_lifecycle.append("headless")
         try:
             yield self.source, self.mirror
@@ -254,6 +251,14 @@ class OutlookWebCliTests(unittest.TestCase):
         code, output, error = self.setup_web()
         self.assertEqual((code, error), (0, ""))
         configured = load_settings(self.paths)
+        self.assertEqual(configured.outlook_backend, "web")
+        self.assertEqual(configured.outlook_web_source_calendar, "Work")
+        self.assertEqual(configured.outlook_web_mirror_calendar, "Busy Sync")
+        self.assertEqual(configured.outlook_web_timezone, "UTC")
+        self.web_login.assert_called_once_with(configured, self.paths)
+        for invocation in self.web_calendars.call_args_list:
+            self.assertEqual(invocation.args, (configured, self.paths))
+        self.assertEqual(self.paths.outlook_web_profile_dir, self.paths.state_dir / "outlook-web-profile")
         self.assertEqual(configured.microsoft_client_id, "")
         self.assertEqual(configured.direction, "both")
         self.assertFalse(self.paths.microsoft_token_file.exists())
