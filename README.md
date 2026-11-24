@@ -19,8 +19,6 @@ For a Linux installation without the PPA, use the [released wheel instructions](
 
 Run `calendar-busy-sync setup` in a terminal for guided configuration, then follow [local setup and operation](docs/usage.md). Scheduling is opt-in after a successful sync of the current configuration. The computer must be awake and online; Busy status does not prevent someone from sending a conflicting invitation.
 
-Microsoft Graph is the default Outlook connection. For a local Firefox-based connection to a separate Outlook mirror calendar, see [opt-in Outlook web compatibility mode](docs/usage.md#opt-in-outlook-web-compatibility-mode).
-
 See the [changelog](CHANGELOG.md) for release history and [project guidance](AGENTS.md) for contribution rules. Live disposable-event lifecycle checks passed in both directions. Coworker Scheduling Assistant visibility remains unverified and was accepted by the maintainer as a release limitation; [issue #1](https://github.com/klondikemarlen/calendar-busy-sync/issues/1) remains open for that observation.
 
 ## Automated Checks

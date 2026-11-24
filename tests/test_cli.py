@@ -273,7 +273,12 @@ class OutlookWebCliTests(unittest.TestCase):
         self.assertIn("including manual duplicates", output)
         self.assertIn("Busy (from sync)", output)
         self.assertIn("Outlook mirror calendar reads: OK", output)
-        self.assertEqual(self.source.events, {"work": self.work})
+        self.assertEqual(
+            self.source.events,
+            {
+                "work": self.work,
+            },
+        )
         self.assertEqual(self.source.writes, [])
         self.assertEqual(self.mirror.events["unrelated"], self.unrelated)
         google_copy = next(event for event in self.google.events.values() if event.marker)

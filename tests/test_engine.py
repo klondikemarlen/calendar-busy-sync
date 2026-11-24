@@ -106,7 +106,13 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(self.outlook.writes, [("create", "copy-0"), ("create", "copy-1")])
         with State(self.paths) as state:
             mappings = {m.source_id: m.target_id for m in state.mappings("google", "outlook")}
-        self.assertEqual(mappings, {"personal": "copy-0", "new": "copy-1"})
+        self.assertEqual(
+            mappings,
+            {
+                "personal": "copy-0",
+                "new": "copy-1",
+            },
+        )
 
     def test_lost_reschedule_response_recovers_new_generation_before_deleting_old(self):
         self.outlook.replace_for_reschedule = True
@@ -170,7 +176,12 @@ class EngineTests(unittest.TestCase):
 
         self.assertEqual(
             self.sync(destination_clients={"outlook": mirror}),
-            {"created": 1, "updated": 0, "deleted": 0, "unchanged": 0},
+            {
+                "created": 1,
+                "updated": 0,
+                "deleted": 0,
+                "unchanged": 0,
+            },
         )
         self.assertEqual(self.outlook.snapshot_reads, 0)
         self.assertEqual(self.outlook.writes, [])
@@ -187,7 +198,12 @@ class EngineTests(unittest.TestCase):
 
         self.assertEqual(
             self.sync(destination_clients=destinations),
-            {"created": 2, "updated": 0, "deleted": 0, "unchanged": 0},
+            {
+                "created": 2,
+                "updated": 0,
+                "deleted": 0,
+                "unchanged": 0,
+            },
         )
         self.assertEqual(
             (self.google.snapshot_reads, self.outlook.snapshot_reads, mirror.snapshot_reads), (1, 1, 1)
@@ -197,7 +213,12 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(copy.start, self.google.events["personal"].start)
         self.assertEqual(
             self.sync(destination_clients=destinations),
-            {"created": 0, "updated": 0, "deleted": 0, "unchanged": 2},
+            {
+                "created": 0,
+                "updated": 0,
+                "deleted": 0,
+                "unchanged": 2,
+            },
         )
 
         out_of_window = event(copy.id, 24 * 800)
@@ -211,11 +232,20 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(self.sync(destination_clients=destinations)["deleted"], 1)
         self.assertEqual(mirror.lookups, [copy.id, copy.id])
         self.assertEqual(mirror.writes, [("create", copy.id), ("update", copy.id), ("delete", copy.id)])
-        self.assertEqual(mirror.events, {"work": mirror_event})
+        self.assertEqual(
+            mirror.events,
+            {
+                "work": mirror_event,
+            },
+        )
         self.assertEqual(self.outlook.lookups, [])
         self.assertEqual(self.outlook.writes, [])
         self.assertEqual(
-            self.outlook.events, {"work": original_work, primary_collision.id: primary_collision}
+            self.outlook.events,
+            {
+                "work": original_work,
+                primary_collision.id: primary_collision,
+            },
         )
 
     def test_omitted_active_source_does_not_use_destination_for_confirmation(self):
